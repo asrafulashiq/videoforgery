@@ -51,14 +51,22 @@ if __name__ == "__main__":
     model = Model().to(device)
 
     # optimizer
-    optimizer = torch.optim.Adam(lr=args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     # load if pretrained model
 
     # train
     iteration = 0
-    for x_batch, y_batch in train_loader:
-        train(x_batch, y_batch, model, optimizer, args, iteration, device)
 
-    # validate
+    for ep in range(args.epoch):
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4
+        )
+        test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=False)
+
+        # train
+        for x_batch, y_batch in train_loader:
+            train(x_batch, y_batch, model, optimizer, args, iteration, device)
+
+        # validate
 
