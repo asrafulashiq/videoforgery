@@ -15,7 +15,7 @@ parser.add_argument(
 parser.add_argument("--seed", type=float, default=0, help="random seed")
 
 parser.add_argument("--batch-size", type=int, default=2, help="batch size")
-
+parser.add_argument("--lr", type=float, default=1e-4, help="learning rate")
 
 args = parser.parse_args()
 print(args)

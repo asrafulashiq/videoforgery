@@ -50,12 +50,15 @@ if __name__ == "__main__":
     # model
     model = Model().to(device)
 
+    # optimizer
+    optimizer = torch.optim.Adam(lr=args.lr)
+
     # load if pretrained model
 
     # train
     iteration = 0
     for x_batch, y_batch in train_loader:
-        train(model, x_batch, y_batch, args, iteration, device)
+        train(x_batch, y_batch, model, optimizer, args, iteration, device)
 
     # validate
 
