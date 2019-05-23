@@ -28,14 +28,6 @@ class Dataset_image:
         self._parse_all_images_with_gt()
 
 
-    def train_test_split(self):
-        indices = np.arange(len(self))
-        np.random.shuffle(indices)
-
-        self.train_index = indices[: int(self.args.split*len(self))]
-        self.test_index = indices[int(self.args.split*len(self)):]
-
-
     def _parse_all_images_with_gt(self):
         self.__im_files_with_gt = []
         for name in self.im_mani_root.iterdir():
@@ -51,9 +43,6 @@ class Dataset_image:
                     self.__im_files_with_gt.append(
                         (im_file, mask_file)
                     )
-
-    def load_batch(self, batch_size=1, is_training=True):
-        pass
 
     def __len__(self):
         return len(self.__im_files_with_gt)

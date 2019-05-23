@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from torch import nn
 from torchvision import transforms
+from tensorboardX import SummaryWriter
 
 # custom module
 
@@ -59,10 +60,10 @@ if __name__ == "__main__":
     iteration = 0
 
     for ep in range(args.epoch):
-
         # train
         for x_batch, y_batch in train_loader:
             train(x_batch, y_batch, model, optimizer, args, iteration, device)
+            iteration += 1
 
         # validate
 
