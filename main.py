@@ -12,7 +12,8 @@ from dataset import Dataset_image
 from utils import CustomTransform
 from train import train
 
-torch.set_default_tensor_type(torch.cuda.FloatTensor)
+if torch.cuda.is_available():
+    torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
 
 if __name__ == "__main__":

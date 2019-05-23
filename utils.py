@@ -16,8 +16,8 @@ class CustomTransform():
         if img.dtype == np.uint8:
             img = img / 255.
 
-        img = self.normalize(img)
         img = self.to_tensor(img)
+        img = self.normalize(img)
 
         if mask is not None:
             mask = self.to_tensor(mask)

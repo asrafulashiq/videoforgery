@@ -14,7 +14,7 @@ parser.add_argument(
 
 parser.add_argument("--seed", type=float, default=0, help="random seed")
 
-parser.add_argument("--batch-size", type=int, default=50, help="batch size")
+parser.add_argument("--batch-size", type=int, default=2, help="batch size")
 
 
 args = parser.parse_args()
