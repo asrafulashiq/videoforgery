@@ -8,7 +8,7 @@ def bce_loss(y, labels):
     pass
 
 
-def train(model, inputs, labels, args, iteration):
-    y = model(inputs)
+def train(model, inputs, labels, args, iteration, device):
+    y = model(inputs.to(device))
 
     print(iteration)

@@ -12,11 +12,17 @@ from dataset import Dataset_image
 from utils import CustomTransform
 from train import train
 
-if torch.cuda.is_available():
-    torch.set_default_tensor_type(torch.cuda.FloatTensor)
+# if torch.cuda.is_available():
+#     torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
 
 if __name__ == "__main__":
+
+    # device
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
 
     # seed
     np.random.seed(args.seed)
@@ -42,16 +48,14 @@ if __name__ == "__main__":
     )
 
     # model
-    model = Model()
-    if torch.cuda.is_available():
-        model.cuda()
+    model = Model().to(device)
 
     # load if pretrained model
 
     # train
     iteration = 0
     for x_batch, y_batch in train_loader:
-        train(model, x_batch, y_batch, args, iteration)
+        train(model, x_batch, y_batch, args, iteration, device)
 
     # validate
 
