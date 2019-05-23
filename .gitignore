@@ -1,0 +1,8 @@
+*.jpg
+*.png
+*.pyc
+__pycache__/
+*.backup
+*.pkl
+*.npy
+.vscode
