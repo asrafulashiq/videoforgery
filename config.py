@@ -12,6 +12,8 @@ parser.add_argument(
     "--root", type=str, default="~/dataset/video_forge/", help="root folder for dataset"
 )
 
+parser.add_argument("--split", type=float, default=0.8, help="train split")
+
 parser.add_argument("--seed", type=float, default=0, help="random seed")
 parser.add_argument("--batch-size", "-b", type=int, default=20, help="batch size")
 parser.add_argument("--lr", type=float, default=1e-4, help="learning rate")

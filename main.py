@@ -34,7 +34,7 @@ if __name__ == "__main__":
     dataset = Dataset_image(args=args, transform=tsfm)
 
     # train test split
-    train_len = int(0.8 * len(dataset))
+    train_len = int(args.split * len(dataset))
     test_len = len(dataset) - train_len
     train_dataset, test_dataset = torch.utils.data.random_split(
         dataset, [train_len, test_len]
@@ -59,10 +59,6 @@ if __name__ == "__main__":
     iteration = 0
 
     for ep in range(args.epoch):
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4
-        )
-        test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=False)
 
         # train
         for x_batch, y_batch in train_loader:

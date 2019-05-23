@@ -13,6 +13,7 @@ class Dataset_image:
 
     def __init__(self, args=None, transform=None):
         # args contain necessary argument
+        self.args = args
         self.videoset = args.videoset
         self.data_root = Path(args.root) / (self.videoset + "_tempered")
         self.data_root = self.data_root.expanduser()
@@ -25,6 +26,14 @@ class Dataset_image:
         self.im_mani_root = self.data_root / "vid"
 
         self._parse_all_images_with_gt()
+
+
+    def train_test_split(self):
+        indices = np.arange(len(self))
+        np.random.shuffle(indices)
+
+        self.train_index = indices[: int(self.args.split*len(self))]
+        self.test_index = indices[int(self.args.split*len(self)):]
 
 
     def _parse_all_images_with_gt(self):
@@ -43,6 +52,8 @@ class Dataset_image:
                         (im_file, mask_file)
                     )
 
+    def load_batch(self, batch_size=1, is_training=True):
+        pass
 
     def __len__(self):
         return len(self.__im_files_with_gt)
@@ -68,7 +79,3 @@ class Dataset_image:
 
         return image, mask
 
-if __name__ == "__main__":
-    from config import args
-    dataset = Dataset_image(args=args)
-    print(len(dataset))
