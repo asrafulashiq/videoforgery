@@ -6,3 +6,9 @@ __pycache__/
 *.pkl
 *.npy
 .vscode
+*.ckpt
+
+ckpt/
+
+*.log
+logs/

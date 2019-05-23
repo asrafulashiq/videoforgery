@@ -2,6 +2,8 @@ import argparse
 
 parser = argparse.ArgumentParser(description="Argument for forgery detection")
 
+parser.add_argument("--model", type=str, default="base", help="model name")
+
 parser.add_argument(
     "--videoset", "-v", type=str, default="SegTrackv2", help="video dataset name"
 )
@@ -11,6 +13,9 @@ parser.add_argument(
 )
 
 parser.add_argument("--seed", type=float, default=0, help="random seed")
+
+parser.add_argument("--batch-size", type=int, default=50, help="batch size")
+
 
 args = parser.parse_args()
 print(args)

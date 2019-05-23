@@ -72,6 +72,3 @@ if __name__ == "__main__":
     from config import args
     dataset = Dataset_image(args=args)
     print(len(dataset))
-
-    for _ in dataset:
-        print("")

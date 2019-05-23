@@ -4,5 +4,11 @@ import torch
 import numpy as np
 
 
-def train(model, x, labels, args):
+def bce_loss(y, labels):
     pass
+
+
+def train(model, inputs, labels, args, iteration):
+    y = model(inputs)
+
+    print(iteration)

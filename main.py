@@ -10,6 +10,7 @@ from models import Model
 from config import args
 from dataset import Dataset_image
 from utils import CustomTransform
+from train import train
 
 torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
@@ -41,10 +42,15 @@ if __name__ == "__main__":
 
     # model
     model = Model()
+    if torch.cuda.is_available():
+        model.cuda()
 
     # load if pretrained model
 
     # train
+    iteration = 0
+    for x_batch, y_batch in train_loader:
+        train(model, x_batch, y_batch, args, iteration)
 
     # validate
 
