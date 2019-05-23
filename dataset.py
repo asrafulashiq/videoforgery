@@ -50,6 +50,8 @@ class Dataset_image:
     def __getitem__(self, idx):
         im_file, mask_file = self.__im_files_with_gt[idx]
         image = io.imread(im_file)
+        image = skimage.img_as_float(image)  # image in [0-1] range
+
         _mask = io.imread(mask_file)
 
         if len(_mask.shape) > 2:
@@ -62,8 +64,7 @@ class Dataset_image:
             mask = skimage.img_as_float(_mask)
 
         if self.transform:
-            image = self.transform(image)
-            mask = self.transform(mask)
+            image, mask = self.transform(image, mask)
 
         return image, mask
 

@@ -2,7 +2,8 @@ from torch import nn
 from torch.nn import functional as F
 import torch
 from unet_models import UNet11
-
+from torchvision import transforms
+import numpy as np
 
 class Model(nn.Module):
     def __init__(self):
@@ -11,5 +12,4 @@ class Model(nn.Module):
 
     def forward(self, x):
         x = self.unet(x)
-        x = torch.sigmoid(x)
         return x
