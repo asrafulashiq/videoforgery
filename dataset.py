@@ -54,8 +54,7 @@ class Dataset_image:
 
         if len(_mask.shape) > 2:
             mval = (0, 0, 255)
-            ind = (_mask[:, :, 0] == mval[0]) & (_mask[:, :, 1] == mval[1]) \
-                & (_mask[:, :, 2] == mval[2])
+            ind = (_mask[:, :, 2] > mval[2]/2)
 
             mask = np.zeros(_mask.shape[:2], dtype=np.float)
             mask[ind] = 1
@@ -73,7 +72,5 @@ if __name__ == "__main__":
     dataset = Dataset_image(args=args)
     print(len(dataset))
 
-    im, mask = dataset[4]
-    io.imshow(im)
-    # io.imshow(mask)
-    io.show()
+    for _ in dataset:
+        print("")
