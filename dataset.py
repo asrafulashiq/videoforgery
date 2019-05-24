@@ -56,7 +56,7 @@ class Dataset_image:
             self.split_train_test()
 
     def load_data(self, batch=10, is_training=True):
-        counter = 1
+        counter = 0
         X = torch.empty((batch, 3, self.args.size, self.args.size), dtype=torch.float32)
         Y = torch.empty((batch, 1, self.args.size, self.args.size), dtype=torch.float32)
 
@@ -67,7 +67,7 @@ class Dataset_image:
                     image, mask = self.__get_im(im_file, mask_file)
                     X[counter] = image
                     Y[counter] = mask
-
+                    counter += 1
                     if counter % batch == 0:
                         yield X, Y
                         X = torch.empty(
@@ -79,7 +79,6 @@ class Dataset_image:
                             dtype=torch.float32,
                         )
                         counter = 0
-                    counter += 1
             else:  # testing mode
                 pass
 
