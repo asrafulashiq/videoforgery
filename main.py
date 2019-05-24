@@ -30,6 +30,9 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
+    # logger
+    writer = SummaryWriter("./logs/" + args.model)
+
     # dataset
     tsfm = CustomTransform()
     dataset = Dataset_image(args=args, transform=tsfm)
@@ -62,8 +65,11 @@ if __name__ == "__main__":
     for ep in range(args.epoch):
         # train
         for x_batch, y_batch in train_loader:
-            train(x_batch, y_batch, model, optimizer, args, iteration, device)
+            train(x_batch, y_batch, model, optimizer, args,
+                iteration, device, writer)
             iteration += 1
+
+    writer.close()
 
         # validate
 

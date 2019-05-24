@@ -10,7 +10,7 @@ def BCE_loss(y, labels):
     return _loss
 
 
-def train(inputs, labels, model, optimizer, args, iteration, device):
+def train(inputs, labels, model, optimizer, args, iteration, device, writer=None):
 
     inputs = inputs.to(device)
     labels = labels.to(device)
@@ -25,3 +25,6 @@ def train(inputs, labels, model, optimizer, args, iteration, device):
     optimizer.step()
 
     print(f"Iteration: {iteration}  Loss : {loss.data.cpu().numpy():.4f}")
+
+    if writer is not None:
+        writer.add_scalar('loss/total', loss, iteration)
