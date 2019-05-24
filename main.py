@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torchvision import transforms
 from tensorboardX import SummaryWriter
-
+from tqdm import tqdm
 # custom module
 
 from models import Model
@@ -53,7 +53,7 @@ if __name__ == "__main__":
         init_ep = checkpoint["epoch"]
 
     # train
-    for ep in range(init_ep, args.epoch):
+    for ep in tqdm(range(init_ep, args.epoch)):
         # train
         for x_batch, y_batch, _ in dataset.load_data(args.batch_size, is_training=True):
             train(x_batch, y_batch, model, optimizer, args,

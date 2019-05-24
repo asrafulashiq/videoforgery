@@ -43,7 +43,7 @@ def plot_samples(preds, labels, args, info=None):
         #     import pdb
         #     pdb.set_trace()
         label = labels[i]
-        imfile = info[0][i]
+        imfile = info[i][0]
         image = skimage.io.imread(imfile)
         image = skimage.transform.resize(image, (label.shape[0], label.shape[1]))
         image = skimage.img_as_float32(image)
