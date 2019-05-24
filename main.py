@@ -38,20 +38,6 @@ if __name__ == "__main__":
     tsfm = CustomTransform()
     dataset = Dataset_image(args=args, transform=tsfm)
 
-    # train test split
-    train_len = int(args.split * len(dataset))
-    test_len = len(dataset) - train_len
-    train_dataset, test_dataset = torch.utils.data.random_split(
-        dataset, [train_len, test_len]
-    )
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4
-    )
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset, batch_size=60, shuffle=True
-    )
-
     # model
     model = Model().to(device)
 
@@ -72,7 +58,7 @@ if __name__ == "__main__":
     # train
     for ep in range(init_ep, args.epoch):
         # train
-        for x_batch, y_batch, _ in train_loader:
+        for x_batch, y_batch in dataset.load_data(args.batch_size, is_training=True):
             train(x_batch, y_batch, model, optimizer, args,
                 iteration, device, logger)
             iteration += 1
@@ -86,7 +72,7 @@ if __name__ == "__main__":
         }, "./ckpt/"+args.model+"_"+args.videoset+".pkl")
 
         # test
-        test(test_loader, model, args, iteration, device, logger)
+        # test(test_loader, model, args, iteration, device, logger)
 
     logger.close()
 

@@ -24,28 +24,85 @@ class Dataset_image:
         self.mask_root = self.data_root / "gt_mask"
         self.gt_root = self.data_root / "gt"
         self.im_mani_root = self.data_root / "vid"
-
         self._parse_all_images_with_gt()
 
+    def split_train_test(self):
+        ind = np.arange(len(self.data))
+        np.random.shuffle(ind)
+        ind_unto = int(len(self.data) * self.args.split)
+        self.train_index = ind[:ind_unto]
+        self.test_index = ind[ind_unto:]
 
     def _parse_all_images_with_gt(self):
-        self.__im_files_with_gt = []
+        # self.__im_files_with_gt = []
+        self.data = []
         for name in self.im_mani_root.iterdir():
+            info = {"name": name.name, "files": []}
             for _file in name.iterdir():
                 if _file.suffix == ".png":
                     im_file = str(_file)
-                    mask_file = os.path.join(str(self.mask_root), name.name,
-                                            (_file.stem+".jpg"))
+                    mask_file = os.path.join(
+                        str(self.mask_root), name.name, (_file.stem + ".jpg")
+                    )
                     try:
                         assert os.path.exists(mask_file)
                     except AssertionError:
                         continue
-                    self.__im_files_with_gt.append(
-                        (im_file, mask_file)
-                    )
+                    info["files"].append((im_file, mask_file))
+                    # self.__im_files_with_gt.append(
+                    #     (im_file, mask_file)
+                    # )
+            self.data.append(info)
 
-    def __len__(self):
-        return len(self.__im_files_with_gt)
+    def load_data(self, batch=10, is_training=True):
+        counter = 1
+        X = np.empty((batch, 3, self.args.size, self.args.size), dtype=torch.float32)
+        Y = np.empty((batch, 1, self.args.size, self.args.size), dtype=torch.float32)
+
+        for i, each_dat in enumerate(self.data):
+            if is_training and i in self.train_index:
+                # training mode
+                for im_file, mask_file in each_dat["files"]:
+                    image, mask = self.__get_im(im_file, mask_file)
+                    X[counter] = image
+                    Y[counter] = mask
+
+                    if counter % batch == 0:
+                        yield X, Y
+                        X = np.empty(
+                            (batch, 3, self.args.size, self.args.size),
+                            dtype=torch.float32,
+                        )
+                        Y = np.empty(
+                            (batch, 1, self.args.size, self.args.size),
+                            dtype=torch.float32,
+                        )
+                    counter += 1
+            else:  # testing mode
+                pass
+
+    # def __len__(self):
+    #     return len(self.__im_files_with_gt)
+
+    def __get_im(self, im_file, mask_file):
+        image = io.imread(im_file)
+        image = skimage.img_as_float32(image)  # image in [0-1] range
+
+        _mask = io.imread(mask_file)
+
+        if len(_mask.shape) > 2:
+            mval = (0, 0, 255)
+            ind = _mask[:, :, 2] > mval[2] / 2
+
+            mask = np.zeros(_mask.shape[:2], dtype=np.float32)
+            mask[ind] = 1
+        else:
+            mask = skimage.img_as_float32(_mask)
+
+        if self.transform:
+            image, mask = self.transform(image, mask)
+
+        return image, mask
 
     def __getitem__(self, idx):
         im_file, mask_file = self.__im_files_with_gt[idx]
@@ -56,7 +113,7 @@ class Dataset_image:
 
         if len(_mask.shape) > 2:
             mval = (0, 0, 255)
-            ind = (_mask[:, :, 2] > mval[2]/2)
+            ind = _mask[:, :, 2] > mval[2] / 2
 
             mask = np.zeros(_mask.shape[:2], dtype=np.float32)
             mask[ind] = 1
@@ -68,7 +125,6 @@ class Dataset_image:
 
         return image, mask, (im_file, mask_file)
 
-
     def get_frames_from_video(self):
         # randomly select one video and get frames (with labels)
         name = np.random.choice(list(self.im_mani_root.iterdir()))
@@ -77,8 +133,9 @@ class Dataset_image:
         for _file in name.iterdir():
             if _file.suffix == ".png":
                 im_file = str(_file)
-                mask_file = os.path.join(str(self.mask_root), name.name,
-                                        (_file.stem+".jpg"))
+                mask_file = os.path.join(
+                    str(self.mask_root), name.name, (_file.stem + ".jpg")
+                )
                 try:
                     assert os.path.exists(mask_file)
                 except AssertionError:
@@ -91,7 +148,7 @@ class Dataset_image:
 
             if len(_mask.shape) > 2:
                 mval = (0, 0, 255)
-                ind = (_mask[:, :, 2] > mval[2]/2)
+                ind = _mask[:, :, 2] > mval[2] / 2
 
                 mask = np.zeros(_mask.shape[:2], dtype=np.float32)
                 mask[ind] = 1
@@ -99,5 +156,4 @@ class Dataset_image:
                 mask = skimage.img_as_float32(_mask)
 
             yield image, mask
-
 
