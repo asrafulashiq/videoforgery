@@ -60,6 +60,7 @@ class Dataset_image:
         counter = 0
         X = torch.empty((batch, 3, self.args.size, self.args.size), dtype=torch.float32)
         Y = torch.empty((batch, 1, self.args.size, self.args.size), dtype=torch.float32)
+        Info = []
 
         if shuffle:
             np.random.shuffle(self.__im_files_with_gt)
@@ -70,9 +71,10 @@ class Dataset_image:
                 image, mask = self.__get_im(im_file, mask_file)
                 X[counter] = image
                 Y[counter] = mask
+                Info.append((im_file, mask_file))
                 counter += 1
                 if counter % batch == 0:
-                    yield X, Y
+                    yield X, Y, Info
                     X = torch.empty(
                         (batch, 3, self.args.size, self.args.size),
                         dtype=torch.float32,
@@ -81,9 +83,10 @@ class Dataset_image:
                         (batch, 1, self.args.size, self.args.size),
                         dtype=torch.float32,
                     )
+                    Info = []
                     counter = 0
         if counter != 0:
-            yield X, Y
+            yield X, Y, Info
 
     # def __len__(self):
     #     return len(self.__im_files_with_gt)
@@ -108,32 +111,10 @@ class Dataset_image:
 
         return image, mask
 
-    def __getitem__(self, idx):
-        im_file, mask_file = self.__im_files_with_gt[idx]
-        image = io.imread(im_file)
-        image = skimage.img_as_float32(image)  # image in [0-1] range
-
-        _mask = io.imread(mask_file)
-
-        if len(_mask.shape) > 2:
-            mval = (0, 0, 255)
-            ind = _mask[:, :, 2] > mval[2] / 2
-
-            mask = np.zeros(_mask.shape[:2], dtype=np.float32)
-            mask[ind] = 1
-        else:
-            mask = skimage.img_as_float32(_mask)
-
-        if self.transform:
-            image, mask = self.transform(image, mask)
-
-        return image, mask, (im_file, mask_file)
 
     def get_frames_from_video(self):
         # randomly select one video and get frames (with labels)
         name = np.random.choice(list(self.im_mani_root.iterdir()))
-
-        frame_list = []
         for _file in name.iterdir():
             if _file.suffix == ".png":
                 im_file = str(_file)
@@ -147,7 +128,6 @@ class Dataset_image:
 
             image = io.imread(im_file)
             image = skimage.img_as_float32(image)  # image in [0-1] range
-
             _mask = io.imread(mask_file)
 
             if len(_mask.shape) > 2:

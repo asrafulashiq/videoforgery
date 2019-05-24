@@ -13,19 +13,20 @@ import os
 import utils
 from utils import MultiPagePdf
 
-def test(test_loader, model, args, iteration, device, logger=None):
+def test(dataset, model, args, iteration, device, logger=None):
     model.eval()
-    (X, labels, info) = next(iter(test_loader))
-    with torch.no_grad():
-        X = X.to(device)
-        labels = labels.to(device)
-        preds = model(X)
-        preds = torch.sigmoid(preds)
+    for X, labels, info in dataset.load_data(batch=40, is_training=False):
+        with torch.no_grad():
+            X = X.to(device)
+            labels = labels.to(device)
+            preds = model(X)
+            preds = torch.sigmoid(preds)
 
-        preds = preds.squeeze()
-        labels = labels.squeeze()
+            preds = preds.squeeze()
+            labels = labels.squeeze()
 
-    plot_samples(preds.data.cpu().numpy(), labels.data.cpu().numpy(), args, info)
+        plot_samples(preds.data.cpu().numpy(), labels.data.cpu().numpy(), args, info)
+        break
 
 
 def plot_samples(preds, labels, args, info=None):

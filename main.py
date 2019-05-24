@@ -55,7 +55,7 @@ if __name__ == "__main__":
     # train
     for ep in range(init_ep, args.epoch):
         # train
-        for x_batch, y_batch in dataset.load_data(args.batch_size, is_training=True):
+        for x_batch, y_batch, _ in dataset.load_data(args.batch_size, is_training=True):
             train(x_batch, y_batch, model, optimizer, args,
                 iteration, device, logger)
             iteration += 1
@@ -69,7 +69,7 @@ if __name__ == "__main__":
         }, "./ckpt/"+args.model+"_"+args.videoset+".pkl")
 
         # test
-        # test(test_loader, model, args, iteration, device, logger)
+        test(dataset, model, args, iteration, device, logger)
 
     logger.close()
 
