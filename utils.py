@@ -6,6 +6,10 @@ from torchvision import transforms
 import numpy as np
 import cv2
 
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+
+
 class CustomTransform():
     def __init__(self, size=224):
         self.size = (size, size)
@@ -27,3 +31,68 @@ class CustomTransform():
             mask = self.to_tensor(mask)
 
         return img, mask
+
+
+def overlay_masks(m1, m2, alpha=0.5):
+    """overlay two boolean mask
+
+    Arguments:
+        m1 {boolean array} -- original mask
+        m2 {boolean array} -- predicted mask
+    """
+    r, c = m1.shape[:2]
+    M1 = np.zeros((r, c, 4), dtype=np.float)
+    M2 = np.zeros((r, c, 4), dtype=np.float)
+
+    M1[m1 > 0] = [0, 1, 0, 0.9]
+    M2[m2 > 0] = [1, 0, 0, 0.3]
+
+    return (M1, M2)
+
+
+class MultiPagePdf:
+    def __init__(self, total_im, out_name, nrows=4, ncols=4, figsize=(8, 6)):
+        """init
+
+        Keyword Arguments:
+            total_im {int} -- #images
+            nrows {int} -- #rows per page (default: {4})
+            ncols {int} -- #columns per page (default: {4})
+            figsize {tuple} -- fig size (default: {(8, 6)})
+        """
+        self.total_im = total_im
+        self.nrows = nrows
+        self.ncols = ncols
+        self.figsize = figsize
+        self.out_name = out_name
+
+        # create figure and axes
+        total_pages = int(np.ceil(total_im/(nrows*ncols)))
+
+        self.figs = []
+        self.axes = []
+
+        for i in range(total_pages):
+            f, a = plt.subplots(nrows, ncols)
+
+            f.set_size_inches(figsize)
+            self.figs.append(f)
+            self.axes.extend(a.flatten())
+
+        self.cnt_ax = 0
+
+    def plot_one(self, x):
+        ax = self.axes[self.cnt_ax]
+        ax.imshow(x[1])  # prediction
+        ax.imshow(x[0])  # ground truth
+
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        self.cnt_ax += 1
+
+    def final(self):
+        with PdfPages(self.out_name) as pdf:
+            for fig in self.figs:
+                pdf.savefig(fig)
+        plt.close('all')

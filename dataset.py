@@ -66,5 +66,5 @@ class Dataset_image:
         if self.transform:
             image, mask = self.transform(image, mask)
 
-        return image, mask
+        return image, mask, (im_file, mask_file)
 

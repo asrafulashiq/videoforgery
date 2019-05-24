@@ -12,3 +12,5 @@ ckpt/
 
 *.log
 logs/
+test_figs/
+*.pdf
