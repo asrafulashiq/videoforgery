@@ -33,10 +33,11 @@ class Dataset_image:
         self.train_index = ind[:ind_unto]
         self.test_index = ind[ind_unto:]
 
+
     def _parse_all_images_with_gt(self):
-        # self.__im_files_with_gt = []
+        self.__im_files_with_gt = []
         self.data = []
-        for name in self.im_mani_root.iterdir():
+        for i, name in enumerate(self.im_mani_root.iterdir()):
             info = {"name": name.name, "files": []}
             for _file in name.iterdir():
                 if _file.suffix == ".png":
@@ -49,39 +50,40 @@ class Dataset_image:
                     except AssertionError:
                         continue
                     info["files"].append((im_file, mask_file))
-                    # self.__im_files_with_gt.append(
-                    #     (im_file, mask_file)
-                    # )
+                    self.__im_files_with_gt.append(
+                        (i, im_file, mask_file)
+                    )
             self.data.append(info)
             self.split_train_test()
 
-    def load_data(self, batch=10, is_training=True):
+    def load_data(self, batch=20, is_training=True, shuffle=True):
         counter = 0
         X = torch.empty((batch, 3, self.args.size, self.args.size), dtype=torch.float32)
         Y = torch.empty((batch, 1, self.args.size, self.args.size), dtype=torch.float32)
 
-        for i, each_dat in enumerate(self.data):
-            if is_training and i in self.train_index:
-                # training mode
-                for im_file, mask_file in each_dat["files"]:
-                    image, mask = self.__get_im(im_file, mask_file)
-                    X[counter] = image
-                    Y[counter] = mask
-                    counter += 1
-                    if counter % batch == 0:
-                        yield X, Y
-                        X = torch.empty(
-                            (batch, 3, self.args.size, self.args.size),
-                            dtype=torch.float32,
-                        )
-                        Y = torch.empty(
-                            (batch, 1, self.args.size, self.args.size),
-                            dtype=torch.float32,
-                        )
-                        counter = 0
-            else:  # testing mode
-                pass
-        yield X, Y
+        if shuffle:
+            np.random.shuffle(self.__im_files_with_gt)
+
+        for i, im_file, mask_file in self.__im_files_with_gt:
+            if (is_training and i in self.train_index) or \
+                (not is_training and i in self.test_index):
+                image, mask = self.__get_im(im_file, mask_file)
+                X[counter] = image
+                Y[counter] = mask
+                counter += 1
+                if counter % batch == 0:
+                    yield X, Y
+                    X = torch.empty(
+                        (batch, 3, self.args.size, self.args.size),
+                        dtype=torch.float32,
+                    )
+                    Y = torch.empty(
+                        (batch, 1, self.args.size, self.args.size),
+                        dtype=torch.float32,
+                    )
+                    counter = 0
+        if counter != 0:
+            yield X, Y
 
     # def __len__(self):
     #     return len(self.__im_files_with_gt)
