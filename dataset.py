@@ -5,7 +5,7 @@ import cv2
 import skimage
 from skimage import io
 import numpy as np
-
+import torch
 
 class Dataset_image:
     """class for dataset of image manipulation
