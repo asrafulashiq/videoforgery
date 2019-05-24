@@ -56,8 +56,8 @@ class Dataset_image:
 
     def load_data(self, batch=10, is_training=True):
         counter = 1
-        X = np.empty((batch, 3, self.args.size, self.args.size), dtype=torch.float32)
-        Y = np.empty((batch, 1, self.args.size, self.args.size), dtype=torch.float32)
+        X = torch.empty((batch, 3, self.args.size, self.args.size), dtype=torch.float32)
+        Y = torch.empty((batch, 1, self.args.size, self.args.size), dtype=torch.float32)
 
         for i, each_dat in enumerate(self.data):
             if is_training and i in self.train_index:
@@ -69,11 +69,11 @@ class Dataset_image:
 
                     if counter % batch == 0:
                         yield X, Y
-                        X = np.empty(
+                        X = torch.empty(
                             (batch, 3, self.args.size, self.args.size),
                             dtype=torch.float32,
                         )
-                        Y = np.empty(
+                        Y = torch.empty(
                             (batch, 1, self.args.size, self.args.size),
                             dtype=torch.float32,
                         )
