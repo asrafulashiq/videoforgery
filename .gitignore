@@ -14,3 +14,4 @@ ckpt/
 logs/
 test_figs/
 *.pdf
+tmp/

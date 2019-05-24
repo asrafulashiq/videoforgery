@@ -68,3 +68,36 @@ class Dataset_image:
 
         return image, mask, (im_file, mask_file)
 
+
+    def get_frames_from_video(self):
+        # randomly select one video and get frames (with labels)
+        name = np.random.choice(list(self.im_mani_root.iterdir()))
+
+        frame_list = []
+        for _file in name.iterdir():
+            if _file.suffix == ".png":
+                im_file = str(_file)
+                mask_file = os.path.join(str(self.mask_root), name.name,
+                                        (_file.stem+".jpg"))
+                try:
+                    assert os.path.exists(mask_file)
+                except AssertionError:
+                    continue
+
+            image = io.imread(im_file)
+            image = skimage.img_as_float32(image)  # image in [0-1] range
+
+            _mask = io.imread(mask_file)
+
+            if len(_mask.shape) > 2:
+                mval = (0, 0, 255)
+                ind = (_mask[:, :, 2] > mval[2]/2)
+
+                mask = np.zeros(_mask.shape[:2], dtype=np.float32)
+                mask[ind] = 1
+            else:
+                mask = skimage.img_as_float32(_mask)
+
+            yield image, mask
+
+

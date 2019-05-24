@@ -7,7 +7,7 @@ from torch.autograd import Variable
 from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-
+import skimage
 import os
 
 import utils
@@ -42,8 +42,13 @@ def plot_samples(preds, labels, args, info=None):
         #     import pdb
         #     pdb.set_trace()
         label = labels[i]
-        inf = (info[0][i], info[1][i])
-        im = utils.overlay_masks(label, pred > args.thres)
+        imfile = info[0][i]
+        image = skimage.io.imread(imfile)
+        image = skimage.transform.resize(image, (label.shape[0], label.shape[1]))
+        image = skimage.img_as_float32(image)
+
+        # im = utils.overlay_masks(label, pred > args.thres)
+        im = utils.add_overlay(image, label, pred>args.thres)
         pdf.plot_one(im)
 
     pdf.final()

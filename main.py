@@ -83,7 +83,7 @@ if __name__ == "__main__":
             "epoch": ep,
             "model_state": model.state_dict(),
             "opt_state": optimizer.state_dict()
-        }, "./ckpt/"+args.model+".pkl")
+        }, "./ckpt/"+args.model+"_"+args.videoset+".pkl")
 
         # test
         test(test_loader, model, args, iteration, device, logger)
