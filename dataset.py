@@ -81,6 +81,7 @@ class Dataset_image:
                         counter = 0
             else:  # testing mode
                 pass
+            yield X, Y
 
     # def __len__(self):
     #     return len(self.__im_files_with_gt)
