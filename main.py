@@ -35,7 +35,7 @@ if __name__ == "__main__":
     logger = SummaryWriter("./logs/" + args.model)
 
     # dataset
-    tsfm = CustomTransform()
+    tsfm = CustomTransform(size=args.size)
     dataset = Dataset_image(args=args, transform=tsfm)
 
     # model
@@ -43,11 +43,8 @@ if __name__ == "__main__":
 
     # optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-
     iteration = 0
     init_ep = 0
-
-
     # load if pretrained model
     if args.ckpt is not None:
         checkpoint = torch.load(args.ckpt)
