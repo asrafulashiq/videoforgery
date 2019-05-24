@@ -53,6 +53,7 @@ class Dataset_image:
                     #     (im_file, mask_file)
                     # )
             self.data.append(info)
+            self.split_train_test()
 
     def load_data(self, batch=10, is_training=True):
         counter = 1
