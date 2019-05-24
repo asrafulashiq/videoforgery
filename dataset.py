@@ -78,6 +78,7 @@ class Dataset_image:
                             (batch, 1, self.args.size, self.args.size),
                             dtype=torch.float32,
                         )
+                        counter = 0
                     counter += 1
             else:  # testing mode
                 pass
