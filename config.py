@@ -5,7 +5,7 @@ parser = argparse.ArgumentParser(description="Argument for forgery detection")
 parser.add_argument("--model", type=str, default="base", help="model name")
 
 parser.add_argument(
-    "--videoset", "-v", type=str, default="SegTrackv2", help="video dataset name"
+    "--videoset", "-v", type=str, default="youtube", help="video dataset name"
 )
 
 parser.add_argument(
