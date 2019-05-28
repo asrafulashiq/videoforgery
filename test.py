@@ -25,7 +25,7 @@ def test(dataset, model, args, iteration, device, logger=None):
     aucs = []
     f1s = []
 
-    counter = 0
+    # counter = 0
     for X, labels, info in tqdm(dataset.load_data(batch=40, is_training=False)):
         with torch.no_grad():
             X = X.to(device)
