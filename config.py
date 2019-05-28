@@ -21,6 +21,8 @@ parser.add_argument(
     help="path to save sample test figures",
 )
 
+parser.add_argument("--test", action='store_true', help="test only mode")
+
 parser.add_argument("--size", type=int, default=224, help="image size")
 parser.add_argument("--split", type=float, default=0.8, help="train split")
 

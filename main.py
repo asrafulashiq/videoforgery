@@ -53,25 +53,28 @@ if __name__ == "__main__":
         init_ep = checkpoint["epoch"]
 
     # train
-    for ep in tqdm(range(init_ep, args.epoch)):
-        # train
-        for x_batch, y_batch, _ in dataset.load_data(args.batch_size, is_training=True):
-            train(x_batch, y_batch, model, optimizer, args,
-                iteration, device, logger)
-            iteration += 1
-            # break
-
-        # save current state
-        torch.save({
-            "epoch": ep,
-            "model_state": model.state_dict(),
-            "opt_state": optimizer.state_dict()
-        }, "./ckpt/"+args.model+"_"+args.videoset+".pkl")
-
-        # test
+    if args.test:  # test mode
         test(dataset, model, args, iteration, device, logger)
+    else:  # train
+        for ep in tqdm(range(init_ep, args.epoch)):
+            # train
+            for x_batch, y_batch, _ in dataset.load_data(args.batch_size, is_training=True):
+                train(x_batch, y_batch, model, optimizer, args,
+                    iteration, device, logger)
+                iteration += 1
+                # break
 
-    logger.close()
+            # save current state
+            torch.save({
+                "epoch": ep,
+                "model_state": model.state_dict(),
+                "opt_state": optimizer.state_dict()
+            }, "./ckpt/"+args.model+"_"+args.videoset+".pkl")
 
-        # validate
+            # test
+            test(dataset, model, args, iteration, device, logger)
+
+        logger.close()
+
+            # validate
 
