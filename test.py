@@ -20,8 +20,6 @@ from utils import MultiPagePdf
 def test(dataset, model, args, iteration, device, logger=None):
     model.eval()
 
-    # Y_pred = []  # store information from all images
-    # Y_gt = []
     aucs = []
     f1s = []
 
@@ -36,10 +34,6 @@ def test(dataset, model, args, iteration, device, logger=None):
             preds = preds.squeeze().data.cpu().numpy()
             labels = labels.squeeze().data.cpu().numpy()
             labels = (labels > 0).astype(np.float32)
-
-            # Y_pred.extend(preds.flatten().tolist())
-            # Y_gt.extend((labels>0).flatten().tolist())
-
         _auc, _f1 = score_report(preds.flatten(), labels.flatten(), args, iteration)
         aucs.append(_auc)
         f1s.append(_f1)
@@ -48,10 +42,16 @@ def test(dataset, model, args, iteration, device, logger=None):
         # break
     # score_report(Y_pred, Y_gt, args, iteration, logger)
 
-    # score report
+    auc_mean = np.mean(aucs)
+    f1_mean = np.mean(f1s)
+
     print("TEST")
-    print(f"AUC_ROC: {np.mean(aucs): .4f}")
-    print(f"F1 Score: {np.mean(f1s):.4f}")
+    print(f"AUC_ROC: {auc_mean: .4f}")
+    print(f"F1 Score: {f1_mean:.4f}")
+
+    if logger is not None:
+        logger.add_scalar("score/f1", f1_mean, iteration)
+        logger.add_scalar("score/auc_roc", auc_mean, iteration)
 
 
 def score_report(y_pred, y_gt, args, iteration, logger=None):
@@ -60,14 +60,6 @@ def score_report(y_pred, y_gt, args, iteration, logger=None):
 
     # f1 score
     f1_score = metrics.f1_score(y_gt, [pr > args.thres for pr in y_pred])
-
-    # print("TEST")
-    # print(f"AUC_ROC: {auc_roc: .4f}")
-    # print(f"F1 Score: {f1_score:.4f}")
-
-    if logger is not None:
-        logger.add_scalar("score/f1", f1_score, iteration)
-        logger.add_scalar("score/auc_roc", auc_roc, iteration)
 
     return auc_roc, f1_score
 

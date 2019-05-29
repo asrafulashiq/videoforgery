@@ -32,7 +32,7 @@ if __name__ == "__main__":
     torch.cuda.manual_seed_all(args.seed)
 
     # logger
-    logger = SummaryWriter("./logs/" + args.model)
+    logger = SummaryWriter("./logs/" + args.model+"_"+args.videoset)
 
     # dataset
     tsfm = CustomTransform(size=args.size)
@@ -40,6 +40,12 @@ if __name__ == "__main__":
 
     # model
     model = Model().to(device)
+
+    # freeze encoder block
+    for i, child in enumerate(model.unet.children()):
+        if i < 11:
+            for par in child.parameters():
+                par.requires_grad = False
 
     # optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -75,6 +81,3 @@ if __name__ == "__main__":
             test(dataset, model, args, iteration, device, logger)
 
         logger.close()
-
-            # validate
-
