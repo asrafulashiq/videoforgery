@@ -14,6 +14,7 @@ from utils import CustomTransform
 from train import train
 from test import test
 
+
 if torch.cuda.is_available():
     torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
@@ -42,13 +43,15 @@ if __name__ == "__main__":
     model = Model().to(device)
 
     # freeze encoder block
-    for i, child in enumerate(model.unet.children()):
-        if i < 11:
-            for par in child.parameters():
-                par.requires_grad = False
+    # for i, child in enumerate(model.unet.children()):
+    #     if i < 11:
+    #         for par in child.parameters():
+    #             par.requires_grad = False
 
     # optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(
+        filter(lambda p: p.requires_grad, model.parameters()),
+        lr=args.lr)
     iteration = 0
     init_ep = 0
     # load if pretrained model

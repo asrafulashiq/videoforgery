@@ -6,13 +6,14 @@ from torch.autograd import Variable
 
 
 def BCE_loss(y, labels):
+    eps = 1e-8
     y = y.squeeze().double()
     labels = labels.squeeze().double()
 
     wgt = torch.sum(labels) / (labels.shape[0] * labels.shape[1] * labels.shape[2])
 
     _loss = -(1 - wgt) * labels * F.logsigmoid(y) - \
-        wgt * (1 - labels) * torch.log(1 - torch.sigmoid(y))
+        wgt * (1 - labels) * torch.log(1 - torch.sigmoid(y) + eps)
     _loss = torch.mean(_loss)
 
     if torch.isnan(_loss):
