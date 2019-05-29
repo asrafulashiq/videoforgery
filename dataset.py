@@ -1,6 +1,7 @@
 from __future__ import print_function
 from pathlib import Path
 import os, sys
+import pickle
 import cv2
 import skimage
 from skimage import io
@@ -110,6 +111,49 @@ class Dataset_image:
             image, mask = self.transform(image, mask)
 
         return image, mask
+
+
+    def load_triplet(self, num=10):
+        # randomly select one video and get frames (with labels)
+        name = np.random.choice(list(self.im_mani_root.iterdir()))
+        gt_file = os.path.join(
+            str(self.gt_root), name.name + ".pkl"
+        )
+
+        with open(gt_file, "rb") as fp:
+            dat = pickle.load(fp)
+
+        filenames = list(dat.keys())
+
+        list_forged_ind = []  # filename indices having forged part
+        for i, f in enumerate(filenames):
+            if dat[f]["mask_orig"] is not None:
+                list_forged_ind.append(i)
+
+        for i in range(num):
+            ind = np.random.choice(list_forged_ind)
+            cur_file = filenames[ind]
+            cur_data = dat[cur_file]
+
+            mask_orig = cur_data["mask_orig"]
+            mask_new = cur_data["mask_new"]
+            offset = cur_data["offset"]
+            src_file = filenames[ind - offset]
+
+
+        for _file in name.iterdir():
+            if _file.suffix == ".png":
+                im_file = str(_file)
+                mask_file = os.path.join(
+                    str(self.mask_root), name.name, (_file.stem + ".jpg")
+                )
+
+                try:
+                    assert os.path.exists(mask_file)
+                except AssertionError:
+                    continue
+
+
 
 
     def get_frames_from_video(self):
