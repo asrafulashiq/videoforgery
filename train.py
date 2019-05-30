@@ -21,6 +21,40 @@ def BCE_loss(y, labels):
 
     return _loss.float()
 
+def Index_loss(y, ind_gt, device):
+    y = y.squeeze()
+    ind_gt = ind_gt.squeeze()
+
+    y_gt = torch.abs(ind_gt[:, 0] - ind_gt[:, 1])
+
+    # _loss = torch.mean(torch.max(y_gt - y, torch.FloatTensor([0]).to(device)))
+    _loss = torch.mean(torch.abs(y_gt - y))
+
+    if torch.isnan(_loss):
+        import pdb; pdb.set_trace()
+
+    return _loss
+
+
+
+def train_match_in_the_video(dataset, model, optimizer,
+                             args, iteration, device, logger=None):
+    X_im, Ind = dataset.load_triplet(num=10)
+    X_im = X_im.to(device)
+    Ind = Ind.to(device)
+
+    f_comp = model(X_im)
+
+    loss = Index_loss(f_comp, Ind, device)
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    print(f"Iteration: {iteration}  Loss : {loss.data.cpu().numpy():.4f}")
+
+    if logger is not None:
+        logger.add_scalar("loss/loss_ind", loss, iteration)
+
 
 def train(inputs, labels, model, optimizer, args, iteration, device, logger=None):
 

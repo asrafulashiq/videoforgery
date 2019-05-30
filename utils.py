@@ -30,7 +30,10 @@ class CustomTransform():
             mask = cv2.resize(mask, self.size)
             mask = self.to_tensor(mask)
 
-        return img, mask
+            return img, mask
+
+        else:
+            return img
 
 
 def overlay_masks(m1, m2, alpha=0.5):

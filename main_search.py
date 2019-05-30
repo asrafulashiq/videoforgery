@@ -1,3 +1,6 @@
+"""main file for training bubblenet type comparison patch matching
+"""
+
 import os
 import numpy as np
 import torch
@@ -5,13 +8,13 @@ from torch import nn
 from torchvision import transforms
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
-# custom module
 
-from models import Model
+# custom module
+from models import Model_comp
 import config
 from dataset import Dataset_image
 from utils import CustomTransform
-from train import train
+from train import train_match_in_the_video
 from test import test
 
 
@@ -27,7 +30,8 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
 
-    args = config.arg_main()
+    args = config.arg_main_search()
+
     # seed
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -41,13 +45,11 @@ if __name__ == "__main__":
     dataset = Dataset_image(args=args, transform=tsfm)
 
     # model
-    model = Model().to(device)
+    model = Model_comp().to(device)
 
-    # freeze encoder block
-    # for i, child in enumerate(model.unet.children()):
-    #     if i < 11:
-    #         for par in child.parameters():
-    #             par.requires_grad = False
+    # freeze resnet module
+    for param in model.res_extractor.parameters():
+        param.requires_grad = False
 
     # optimizer
     optimizer = torch.optim.Adam(
@@ -64,24 +66,25 @@ if __name__ == "__main__":
 
     # train
     if args.test:  # test mode
-        test(dataset, model, args, iteration, device, logger)
+        # ! TODO
+        pass
+        # test(dataset, model, args, iteration, device, logger)
     else:  # train
-        for ep in tqdm(range(init_ep, args.epoch)):
+        for itr in tqdm(range(init_ep, args.epoch)):
             # train
-            for x_batch, y_batch, _ in dataset.load_data(args.batch_size, is_training=True):
-                train(x_batch, y_batch, model, optimizer, args,
-                    iteration, device, logger)
-                iteration += 1
-                # break
+            train_match_in_the_video(
+                dataset, model, optimizer, args, itr, device
+            )
 
-            # save current state
-            torch.save({
-                "epoch": ep,
-                "model_state": model.state_dict(),
-                "opt_state": optimizer.state_dict()
-            }, "./ckpt/"+args.model+"_"+args.videoset+".pkl")
+            if itr % 300 == 0:  # save model
+                # save current state
+                torch.save({
+                    "epoch": itr,
+                    "model_state": model.state_dict(),
+                    "opt_state": optimizer.state_dict()
+                }, "./ckpt/"+args.model+"_"+args.videoset+".pkl")
 
             # test
-            test(dataset, model, args, iteration, device, logger)
+            # test(dataset, model, args, iteration, device, logger)
 
         logger.close()

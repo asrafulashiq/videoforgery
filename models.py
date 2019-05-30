@@ -62,7 +62,9 @@ class Model_comp(nn.Module):
         x_feat = self.res_extractor(x)
         x_feat = x_feat.view(B, 3 * 512)
 
-        y = self.linear(x_feat)
+        y = self.linear(x_feat)  # (B, 1)
+
+        y = torch.tanh(y)
 
         return y
 

@@ -49,7 +49,7 @@ if __name__ == "__main__":
         os.mkdir(path)
 
         for i, (image, label) in tqdm(enumerate(dataset.get_frames_from_video())):
-            im_tensor, _ = tsfm(image)
+            im_tensor = tsfm(image)
             im_tensor = im_tensor.to(device)
 
             with torch.no_grad():

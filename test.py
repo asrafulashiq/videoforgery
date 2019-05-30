@@ -18,10 +18,10 @@ import utils
 from utils import MultiPagePdf
 
 
-def test_match_in_the_video(dataset, model, args, iteration, device, logger=None):
-    """match an image with forged match in the video
-    """
-    
+# def test_match_in_the_video(dataset, model, args, iteration, device, logger=None):
+#     """match an image with forged match in the video
+#     """
+
 
 def test(dataset, model, args, iteration, device, logger=None):
     model.eval()

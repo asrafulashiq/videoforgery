@@ -115,46 +115,97 @@ class Dataset_image:
 
     def load_triplet(self, num=10):
         # randomly select one video and get frames (with labels)
-        name = np.random.choice(list(self.im_mani_root.iterdir()))
-        gt_file = os.path.join(
-            str(self.gt_root), name.name + ".pkl"
-        )
+        while True:
+            name = np.random.choice(list(self.im_mani_root.iterdir()))
+            gt_file = os.path.join(
+                str(self.gt_root), name.name + ".pkl"
+            )
 
-        with open(gt_file, "rb") as fp:
-            dat = pickle.load(fp)
+            with open(gt_file, "rb") as fp:
+                data = pickle.load(fp)
 
-        filenames = list(dat.keys())
+            filenames = list(data.keys())
 
-        list_forged_ind = []  # filename indices having forged part
-        for i, f in enumerate(filenames):
-            if dat[f]["mask_orig"] is not None:
-                list_forged_ind.append(i)
+            list_forged_ind = []  # filename indices having forged part
+            for i, f in enumerate(filenames):
+                if data[f]["mask_orig"] is not None:
+                    list_forged_ind.append(i)
+            if list_forged_ind:
+                break
+
+        X_im = torch.empty(num, 3, 3, self.args.size, self.args.size,
+                           dtype=torch.float32)
+        X_ind = torch.empty(num, 2, dtype=torch.float32)
 
         for i in range(num):
             ind = np.random.choice(list_forged_ind)
             cur_file = filenames[ind]
-            cur_data = dat[cur_file]
+            cur_data = data[cur_file]
 
             mask_orig = cur_data["mask_orig"]
             mask_new = cur_data["mask_new"]
             offset = cur_data["offset"]
             src_file = filenames[ind - offset]
 
+            # generate triplet: cur, im1 (with good match), im2 (random)
+            src_neg_ind = np.random.choice(
+                list(range(ind-offset))+list(range(ind-offset+1, len(filenames)))
+            )
+            src_neg_file = filenames[src_neg_ind]
 
-        for _file in name.iterdir():
-            if _file.suffix == ".png":
-                im_file = str(_file)
-                mask_file = os.path.join(
-                    str(self.mask_root), name.name, (_file.stem + ".jpg")
+            #
+            fname = os.path.join(self.im_mani_root , *cur_file.parts[-2:])
+            im = io.imread(fname)
+            im_mask_new = mask_new
+
+            im_t = self.image_with_mask(im, im_mask_new)
+
+            src_fname = os.path.join(self.im_mani_root , *src_file.parts[-2:])
+            im_src_pos = skimage.img_as_float32(io.imread(src_fname))
+            ind_src_pos = (ind - offset) / len(filenames)
+
+            if data[src_file]["mask_new"] is not None:
+                _mask = data[src_file]["mask_new"]
+                im_src_pos = self.image_with_mask(
+                    im_src_pos, _mask, type="background"
                 )
 
-                try:
-                    assert os.path.exists(mask_file)
-                except AssertionError:
-                    continue
+            neg_fname = os.path.join(self.im_mani_root , *src_neg_file.parts[-2:])
+            im_src_neg = skimage.img_as_float32(io.imread(neg_fname))
+            ind_src_neg = src_neg_ind / len(filenames)
+
+            if data[src_neg_file]["mask_new"] is not None:
+                _mask = data[src_neg_file]["mask_new"]
+                im_src_neg = self.image_with_mask(
+                    im_src_neg, _mask, type="background"
+                )
+
+            if self.transform:
+                im_t = self.transform(im_t)
+                im_src_pos = self.transform(im_src_pos)
+                im_src_neg = self.transform(im_src_neg)
+
+            X_im[i, 0] = im_t
+            X_im[i, 1] = im_src_pos
+            X_im[i, 2] = im_src_neg
+
+            X_ind[i] = torch.tensor([ind_src_pos, ind_src_neg],
+                                    dtype=torch.float32)
+        return X_im, X_ind
 
 
+    def image_with_mask(self, im, mask, type="foreground"):
+        im = skimage.img_as_float32(im)
+        mask = skimage.img_as_float32(mask)
 
+        if len(im.shape) > len(mask.shape):
+            mask = mask[..., None]
+
+        if type == "foreground":
+            im_masked = im * mask
+        else:
+            im_masked = im * (1 - mask)
+        return im_masked
 
     def get_frames_from_video(self):
         # randomly select one video and get frames (with labels)
