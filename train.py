@@ -12,40 +12,49 @@ def BCE_loss(y, labels):
 
     wgt = torch.sum(labels) / (labels.shape[0] * labels.shape[1] * labels.shape[2])
 
-    _loss = -(1 - wgt) * labels * F.logsigmoid(y) - \
-        wgt * (1 - labels) * torch.log(1 - torch.sigmoid(y) + eps)
+    _loss = -(1 - wgt) * labels * F.logsigmoid(y) - wgt * (1 - labels) * torch.log(
+        1 - torch.sigmoid(y) + eps
+    )
     _loss = torch.mean(_loss)
 
     if torch.isnan(_loss):
-        import pdb; pdb.set_trace()
+        import pdb
+
+        pdb.set_trace()
 
     return _loss.float()
 
-def Index_loss(y, ind_gt, device):
-    y = y.squeeze()
+
+def Index_loss(ysim, ydis, ind_gt, device):
+    ysim = torch.pow(torch.sigmoid(ysim.squeeze()), 2)
+    ydis = torch.pow(torch.sigmoid(ydis.squeeze()), 2)
     ind_gt = ind_gt.squeeze()
 
     y_gt = torch.abs(ind_gt[:, 0] - ind_gt[:, 1])
-
     # _loss = torch.mean(torch.max(y_gt - y, torch.FloatTensor([0]).to(device)))
-    _loss = torch.mean(torch.abs(y_gt - y))
+    _loss = torch.mean(
+        torch.max(0.2 + ysim - ydis, torch.FloatTensor([0]).to(device))
+    )
 
     if torch.isnan(_loss):
-        import pdb; pdb.set_trace()
+        import pdb
+        pdb.set_trace()
 
     return _loss
 
 
-
-def train_match_in_the_video(dataset, model, optimizer,
-                             args, iteration, device, logger=None):
-    X_im, Ind = dataset.load_triplet(num=10)
+def train_match_in_the_video(
+    dataset, model, optimizer, args, iteration, device, logger=None
+):
+    model.train()
+    X_im, Ind = dataset.load_triplet(num=args.batch_size)
     X_im = X_im.to(device)
     Ind = Ind.to(device)
 
-    f_comp = model(X_im)
+    y_sim = model(X_im[:, [0, 1]])
+    y_dis = model(X_im[:, [0, 2]])
 
-    loss = Index_loss(f_comp, Ind, device)
+    loss = Index_loss(y_sim, y_dis, Ind, device)
 
     optimizer.zero_grad()
     loss.backward()

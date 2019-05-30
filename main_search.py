@@ -15,7 +15,7 @@ import config
 from dataset import Dataset_image
 from utils import CustomTransform
 from train import train_match_in_the_video
-from test import test
+from test import test_match_in_the_video
 
 
 if torch.cuda.is_available():
@@ -38,7 +38,7 @@ if __name__ == "__main__":
     torch.cuda.manual_seed_all(args.seed)
 
     # logger
-    logger = SummaryWriter("./logs/" + args.model+"_"+args.videoset)
+    logger = SummaryWriter("./logs/" + args.model + "_" + args.videoset)
 
     # dataset
     tsfm = CustomTransform(size=args.size)
@@ -48,13 +48,19 @@ if __name__ == "__main__":
     model = Model_comp().to(device)
 
     # freeze resnet module
-    for param in model.res_extractor.parameters():
-        param.requires_grad = False
+    # for param in model.res_extractor.parameters():
+        # param.requires_grad = False
 
     # optimizer
-    optimizer = torch.optim.Adam(
-        filter(lambda p: p.requires_grad, model.parameters()),
-        lr=args.lr)
+    optimizer = torch.optim.SGD(
+        filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr,
+        momentum=0.95
+    )
+
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(
+        optimizer, milestones=[2000, 5000, 10000], gamma=0.5
+    )
+
     iteration = 0
     init_ep = 0
     # load if pretrained model
@@ -64,27 +70,33 @@ if __name__ == "__main__":
         optimizer.load_state_dict(checkpoint["opt_state"])
         init_ep = checkpoint["epoch"]
 
+        scheduler.last_epoch = init_ep
+
     # train
     if args.test:  # test mode
-        # ! TODO
-        pass
-        # test(dataset, model, args, iteration, device, logger)
+        test_match_in_the_video(dataset, model, args, iteration, device, logger)
     else:  # train
         for itr in tqdm(range(init_ep, args.epoch)):
             # train
             train_match_in_the_video(
-                dataset, model, optimizer, args, itr, device
+                dataset, model, optimizer, args, itr, device, logger
             )
 
-            if itr % 300 == 0:  # save model
-                # save current state
-                torch.save({
-                    "epoch": itr,
-                    "model_state": model.state_dict(),
-                    "opt_state": optimizer.state_dict()
-                }, "./ckpt/"+args.model+"_"+args.videoset+".pkl")
+            scheduler.step()
 
-            # test
-            # test(dataset, model, args, iteration, device, logger)
+            if (itr + 1) % 1000 == 0:  # save model
+                # save current state
+                torch.save(
+                    {
+                        "epoch": itr,
+                        "model_state": model.state_dict(),
+                        "opt_state": optimizer.state_dict(),
+                    },
+                    "./ckpt/" + args.model + "_" + args.videoset + ".pkl",
+                )
+
+            if itr % 1000 == 0:
+                # test
+                test_match_in_the_video(dataset, model, args, iteration, device, logger)
 
         logger.close()

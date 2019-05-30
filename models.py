@@ -20,13 +20,14 @@ class Model(nn.Module):
 def init_weights(module):
     if type(module) == nn.Linear:
         nn.init.xavier_uniform_(module.weight)
-        module.bias.data.fill_(0.)
+        module.bias.data.fill_(0.0)
 
 
 class Model_comp(nn.Module):
     """model to compare two frames with image patch
     """
-    def __init__(self, size=(224, 224), drop_rate=0.3):
+
+    def __init__(self, size=(224, 224), drop_rate=0.3, num=2):
         super().__init__()
         if isinstance(size, tuple):
             self.size = size
@@ -34,16 +35,14 @@ class Model_comp(nn.Module):
             self.size = (size, size)
 
         # create resnet block
-        resnet = models.resnet34(pretrained=True)
+        resnet = models.resnet18(pretrained=True)
         self.res_extractor = nn.Sequential(
             *list(resnet.children())[:-1]
         )  # feature extractor with resnet
 
         # linear layer
         self.linear = nn.Sequential(
-            nn.Linear(3 * 512, 256),
-            nn.ReLU(),
-            nn.Linear(256, 128),
+            nn.Linear(num * 512, 128),
             nn.ReLU(),
             nn.Dropout(drop_rate),
             nn.Linear(128, 32),
@@ -55,16 +54,14 @@ class Model_comp(nn.Module):
         self.linear.apply(init_weights)
 
     def forward(self, x):
-        # x shape: (B, 3, 3, 224, 224)
-        B, _, _, h, w = x.shape
-        x = x.view(B * 3, 3, h, w)
+        # x shape: (B, 2, 3, 224, 224)
+        B, num, _, h, w = x.shape
+        x = x.view(B * num, 3, h, w)
 
         x_feat = self.res_extractor(x)
-        x_feat = x_feat.view(B, 3 * 512)
+        x_feat = x_feat.view(B, num * 512)
 
         y = self.linear(x_feat)  # (B, 1)
-
-        y = torch.tanh(y)
 
         return y
 

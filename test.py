@@ -18,11 +18,33 @@ import utils
 from utils import MultiPagePdf
 
 
-# def test_match_in_the_video(dataset, model, args, iteration, device, logger=None):
-#     """match an image with forged match in the video
-#     """
+@torch.no_grad()
+def test_match_in_the_video(dataset, model, args, iteration, device, logger=None):
+    """match an image with forged match in the video
+    """
+    model.eval()
+    for cnt in range(10):
+        X, x_ref, gt_ind, first_ind = dataset.get_search_from_video()
+
+        X = X.to(device)
+        x_ref = x_ref.to(device)
+
+        sim_list = []
+        for i in range(X.shape[0]):
+            _input = torch.stack([x_ref, X[i]], 0).to(device).unsqueeze(0)
+            out = model(_input).squeeze()
+            out = torch.sigmoid(out)
+            sim_list.append(
+                out.data.cpu().numpy()
+            )
+        sort_ind = np.argsort(sim_list)
+        print("{:03d} Target: {:2d}, Matched: {:2d}, topk: {:3d}, GT: {:2d}".format(
+            cnt, first_ind, sort_ind[0],
+            np.where(sort_ind==gt_ind)[0][0]+1, gt_ind
+        ))
 
 
+@torch.no_grad()
 def test(dataset, model, args, iteration, device, logger=None):
     model.eval()
 
@@ -31,15 +53,15 @@ def test(dataset, model, args, iteration, device, logger=None):
 
     # counter = 0
     for X, labels, info in tqdm(dataset.load_data(batch=40, is_training=False)):
-        with torch.no_grad():
-            X = X.to(device)
-            labels = labels.to(device)
-            preds = model(X)
-            preds = torch.sigmoid(preds)
+        X = X.to(device)
+        labels = labels.to(device)
+        preds = model(X)
+        preds = torch.sigmoid(preds)
 
-            preds = preds.squeeze().data.cpu().numpy()
-            labels = labels.squeeze().data.cpu().numpy()
-            labels = (labels > 0).astype(np.float32)
+        preds = preds.squeeze().data.cpu().numpy()
+        labels = labels.squeeze().data.cpu().numpy()
+        labels = (labels > 0).astype(np.float32)
+
         _auc, _f1 = score_report(preds.flatten(), labels.flatten(), args, iteration)
         aucs.append(_auc)
         f1s.append(_f1)

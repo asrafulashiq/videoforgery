@@ -8,6 +8,7 @@ from skimage import io
 import numpy as np
 import torch
 
+
 class Dataset_image:
     """class for dataset of image manipulation
     """
@@ -34,7 +35,6 @@ class Dataset_image:
         self.train_index = ind[:ind_unto]
         self.test_index = ind[ind_unto:]
 
-
     def _parse_all_images_with_gt(self):
         self.__im_files_with_gt = []
         self.data = []
@@ -51,9 +51,7 @@ class Dataset_image:
                     except AssertionError:
                         continue
                     info["files"].append((im_file, mask_file))
-                    self.__im_files_with_gt.append(
-                        (i, im_file, mask_file)
-                    )
+                    self.__im_files_with_gt.append((i, im_file, mask_file))
             self.data.append(info)
             self.split_train_test()
 
@@ -67,8 +65,9 @@ class Dataset_image:
             np.random.shuffle(self.__im_files_with_gt)
 
         for i, im_file, mask_file in self.__im_files_with_gt:
-            if (is_training and i in self.train_index) or \
-                (not is_training and i in self.test_index):
+            if (is_training and i in self.train_index) or (
+                not is_training and i in self.test_index
+            ):
                 image, mask = self.__get_im(im_file, mask_file)
                 X[counter] = image
                 Y[counter] = mask
@@ -77,12 +76,10 @@ class Dataset_image:
                 if counter % batch == 0:
                     yield X, Y, Info
                     X = torch.empty(
-                        (batch, 3, self.args.size, self.args.size),
-                        dtype=torch.float32,
+                        (batch, 3, self.args.size, self.args.size), dtype=torch.float32
                     )
                     Y = torch.empty(
-                        (batch, 1, self.args.size, self.args.size),
-                        dtype=torch.float32,
+                        (batch, 1, self.args.size, self.args.size), dtype=torch.float32
                     )
                     Info = []
                     counter = 0
@@ -112,14 +109,23 @@ class Dataset_image:
 
         return image, mask
 
+    def _add_sorp(self, im, type="pepper"):
+        im = skimage.img_as_float32(im)
+        if type == "pepper":
+            mask = np.ones(im.shape[:2], dtype=np.float32)
+            mask = skimage.util.random_noise(mask, mode=type)
+            im = im * mask[..., None]
+        elif type == "salt":
+            mask = np.zeros(im.shape[:2], dtype=np.float32)
+            mask = skimage.util.random_noise(mask, mode=type)
+            im[mask > 0] = (1, 1, 1)
+        return im
 
     def load_triplet(self, num=10):
         # randomly select one video and get frames (with labels)
         while True:
             name = np.random.choice(list(self.im_mani_root.iterdir()))
-            gt_file = os.path.join(
-                str(self.gt_root), name.name + ".pkl"
-            )
+            gt_file = os.path.join(str(self.gt_root), name.name + ".pkl")
 
             with open(gt_file, "rb") as fp:
                 data = pickle.load(fp)
@@ -133,8 +139,9 @@ class Dataset_image:
             if list_forged_ind:
                 break
 
-        X_im = torch.empty(num, 3, 3, self.args.size, self.args.size,
-                           dtype=torch.float32)
+        X_im = torch.empty(
+            num, 3, 3, self.args.size, self.args.size, dtype=torch.float32
+        )
         X_ind = torch.empty(num, 2, dtype=torch.float32)
 
         for i in range(num):
@@ -149,36 +156,36 @@ class Dataset_image:
 
             # generate triplet: cur, im1 (with good match), im2 (random)
             src_neg_ind = np.random.choice(
-                list(range(ind-offset))+list(range(ind-offset+1, len(filenames)))
+                list(range(ind - offset))
+                + list(range(ind - offset + 1, len(filenames)))
             )
             src_neg_file = filenames[src_neg_ind]
 
             #
-            fname = os.path.join(self.im_mani_root , *cur_file.parts[-2:])
-            im = io.imread(fname)
+            fname = os.path.join(self.im_mani_root, *cur_file.parts[-2:])
+            im = skimage.img_as_float32(io.imread(fname))
             im_mask_new = mask_new
 
-            im_t = self.image_with_mask(im, im_mask_new)
+            im_t = self.image_with_mask(im, im_mask_new, type="foreground")
+            im_t = self._add_sorp(im_t, type="salt")
 
-            src_fname = os.path.join(self.im_mani_root , *src_file.parts[-2:])
+            src_fname = os.path.join(self.im_mani_root, *src_file.parts[-2:])
             im_src_pos = skimage.img_as_float32(io.imread(src_fname))
             ind_src_pos = (ind - offset) / len(filenames)
 
             if data[src_file]["mask_new"] is not None:
                 _mask = data[src_file]["mask_new"]
-                im_src_pos = self.image_with_mask(
-                    im_src_pos, _mask, type="background"
-                )
+                im_src_pos = self.image_with_mask(im_src_pos, _mask, type="background")
+                im_src_pos = self._add_sorp(im_src_pos, type="pepper")
 
-            neg_fname = os.path.join(self.im_mani_root , *src_neg_file.parts[-2:])
+            neg_fname = os.path.join(self.im_mani_root, *src_neg_file.parts[-2:])
             im_src_neg = skimage.img_as_float32(io.imread(neg_fname))
             ind_src_neg = src_neg_ind / len(filenames)
 
             if data[src_neg_file]["mask_new"] is not None:
                 _mask = data[src_neg_file]["mask_new"]
-                im_src_neg = self.image_with_mask(
-                    im_src_neg, _mask, type="background"
-                )
+                im_src_neg = self.image_with_mask(im_src_neg, _mask, type="background")
+                im_src_neg = self._add_sorp(im_src_neg, type="pepper")
 
             if self.transform:
                 im_t = self.transform(im_t)
@@ -189,10 +196,8 @@ class Dataset_image:
             X_im[i, 1] = im_src_pos
             X_im[i, 2] = im_src_neg
 
-            X_ind[i] = torch.tensor([ind_src_pos, ind_src_neg],
-                                    dtype=torch.float32)
+            X_ind[i] = torch.tensor([ind_src_pos, ind_src_neg], dtype=torch.float32)
         return X_im, X_ind
-
 
     def image_with_mask(self, im, mask, type="foreground"):
         im = skimage.img_as_float32(im)
@@ -206,6 +211,55 @@ class Dataset_image:
         else:
             im_masked = im * (1 - mask)
         return im_masked
+
+    def get_search_from_video(self):
+        # randomly select one video and get frames (with labels)
+        while True:
+            name = np.random.choice(list(self.im_mani_root.iterdir()))
+            gt_file = os.path.join(str(self.gt_root), name.name + ".pkl")
+
+            with open(gt_file, "rb") as fp:
+                data = pickle.load(fp)
+
+            filenames = list(data.keys())
+            flag = False
+            for i, f in enumerate(filenames):
+                if data[f]["mask_orig"] is not None:
+                    flag = True
+                    break
+            if flag:
+                break
+
+        num = len(filenames)
+        X_im = torch.empty(num, 3, self.args.size, self.args.size, dtype=torch.float32)
+
+        _first = False
+        for i in range(num):
+            ind = i
+            cur_file = filenames[ind]
+            cur_data = data[cur_file]
+            im_mask_new = cur_data["mask_new"]
+
+            fname = os.path.join(self.im_mani_root, *cur_file.parts[-2:])
+            im = skimage.img_as_float32(io.imread(fname))
+
+            if im_mask_new is not None:
+                if not _first:
+                    im_first = self.image_with_mask(im, im_mask_new, type="foreground")
+                    _first = True
+                    first_ind = i
+                    match_ind = i - cur_data["offset"]
+                    im_first = self.transform(im_first)
+
+                im = self.image_with_mask(im, im_mask_new, type="background")
+
+            im = self._add_sorp(im, type="pepper")
+
+            if self.transform:
+                im = self.transform(im)
+            X_im[i] = im
+
+        return X_im, im_first, match_ind, first_ind
 
     def get_frames_from_video(self):
         # randomly select one video and get frames (with labels)
