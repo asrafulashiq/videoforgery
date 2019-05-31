@@ -24,16 +24,14 @@ def test_track(dataset, model, args, iteration, device, num=10, logger=None):
 
     aucs = []
     f1s = []
-
+    P = []
+    L = []
     for i in tqdm(range(num)):
         # counter = 0
-        P = []
-        L = []
         prev = None
         for X, labels in dataset.get_frames_from_video(do_transform=True):
             X = X.to(device)
             labels = labels.to(device)
-
             if prev is None:
                 prev = torch.zeros(labels.shape, dtype=torch.float32).to(device)
 
@@ -48,12 +46,13 @@ def test_track(dataset, model, args, iteration, device, num=10, logger=None):
             P.extend(_preds.tolist())
             L.extend(_labels.tolist())
 
-        _auc, _f1 = score_report(P, L, args, iteration)
-        aucs.append(_auc)
-        f1s.append(_f1)
+        # _auc, _f1 = score_report(P, L, args, iteration)
+        # aucs.append(_auc)
+        # f1s.append(_f1)
+    auc_mean, f1_mean = score_report(P, L, args, iteration)
 
-    auc_mean = np.mean(aucs)
-    f1_mean = np.mean(f1s)
+    # auc_mean = np.mean(aucs)
+    # f1_mean = np.mean(f1s)
 
     print("TEST")
     print(f"AUC_ROC: {auc_mean: .4f}")

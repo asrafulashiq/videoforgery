@@ -101,8 +101,8 @@ class Dataset_image:
             np.random.shuffle(vid_list)
 
         counter = 1
-        Im = torch.empty(maxlen, 4, self.args.size, self.args.size)
-        GT = torch.empty(maxlen, 1, self.args.size, self.args.size)
+        Im = torch.zeros(maxlen, 4, self.args.size, self.args.size)
+        GT = torch.zeros(maxlen, 1, self.args.size, self.args.size)
 
         for name in vid_list:
             prev_mask = None
@@ -135,15 +135,15 @@ class Dataset_image:
 
                 if counter % maxlen == 0:
                     yield Im, GT
+                    Im = torch.zeros(maxlen, 4, self.args.size, self.args.size)
+                    GT = torch.zeros(maxlen, 1, self.args.size, self.args.size)
                     counter = 0
                 counter += 1
-        if counter < maxlen and counter > 1:
-            yield Im, GT
 
     def load_data(self, batch=20, is_training=True, shuffle=True):
         counter = 0
-        X = torch.empty((batch, 3, self.args.size, self.args.size), dtype=torch.float32)
-        Y = torch.empty((batch, 1, self.args.size, self.args.size), dtype=torch.float32)
+        X = torch.zeros((batch, 3, self.args.size, self.args.size), dtype=torch.float32)
+        Y = torch.zeros((batch, 1, self.args.size, self.args.size), dtype=torch.float32)
         Info = []
 
         if shuffle:
@@ -162,16 +162,18 @@ class Dataset_image:
                     if torch.any(torch.isnan(Y)):
                         import pdb; pdb.set_trace()
                     yield X, Y, Info
-                    X = torch.empty(
+
+                    if torch.any(Y < 0):
+                        import pdb; pdb.set_trace()
+                    X = torch.zeros(
                         (batch, 3, self.args.size, self.args.size), dtype=torch.float32
                     )
-                    Y = torch.empty(
+                    Y = torch.zeros(
                         (batch, 1, self.args.size, self.args.size), dtype=torch.float32
                     )
                     Info = []
                     counter = 0
-        if counter != 0:
-            yield X, Y, Info
+
 
     # def __len__(self):
     #     return len(self.__im_files_with_gt)
@@ -192,6 +194,9 @@ class Dataset_image:
 
         if do_transform and self.transform is not None:
             image, mask = self.transform(image, mask)
+
+            if torch.any(mask < 0):
+                import pdb; pdb.set_trace()
 
         return image, mask
 
@@ -350,7 +355,7 @@ class Dataset_image:
                     continue
             image, mask = self.__get_im(im_file, mask_file)
 
-            if torch.any(torch.isnan(mask)):
+            if torch.any(torch.isnan(mask)) or torch.any(mask < 0):
                 import pdb; pdb.set_trace()
 
             yield image, mask

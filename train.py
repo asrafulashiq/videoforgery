@@ -17,7 +17,7 @@ def BCE_loss(y, labels):
     )
     _loss = torch.mean(_loss)
 
-    if torch.isnan(_loss):
+    if torch.isnan(_loss) or _loss < 0:
         import pdb
 
         pdb.set_trace()
@@ -68,7 +68,7 @@ def train_match_in_the_video(
 def train(inputs, labels, model, optimizer, args, iteration, device, logger=None):
 
     model.train(True)
-    inputs = inputs.to(device)[:, :3]
+    inputs = inputs.to(device)
     labels = labels.to(device)
 
     # prediction
@@ -82,7 +82,8 @@ def train(inputs, labels, model, optimizer, args, iteration, device, logger=None
     nn.utils.clip_grad_norm_(model.parameters(), args.clip)
     optimizer.step()
 
-    print(f"Iteration: {iteration}  Loss : {loss.data.cpu().numpy():.4f}")
+    loss_val = loss.data.cpu().numpy()
+    print(f"Iteration: {iteration}  Loss : {loss_val:.4f}")
 
     if logger is not None:
         logger.add_scalar("loss/total", loss, iteration)

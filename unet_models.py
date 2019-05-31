@@ -59,16 +59,12 @@ class UNet11(nn.Module):
         self.relu = self.encoder[1]
         if mod:
             enc = self.encoder[0]
-            self.conv1 = enc
-            # self.conv1 = torch.nn.Conv2d(
-            #     mod_chan, enc.out_channels, kernel_size=enc.kernel_size,
-            #     stride=enc.stride, padding=enc.padding)
+            self.conv1 = torch.nn.Conv2d(
+                mod_chan, enc.out_channels, kernel_size=enc.kernel_size,
+                stride=enc.stride, padding=enc.padding)
             self.conv1.weight.data[:, :3].copy_(enc.weight.data[:, :3])
             self.conv1.weight.data[:, -1].copy_(enc.weight.data[:, -1])
             self.conv1.bias.data = enc.bias.data
-            # conv1.weight.data = enc.weight.data
-            self.conv1.load_state_dict(enc.state_dict())
-            # self.conv1 = conv1
         else:
             self.conv1 = self.encoder[0]
         self.conv2 = self.encoder[3]
@@ -194,7 +190,8 @@ class AlbuNet(nn.Module):
         """
 
     def __init__(
-        self, num_classes=1, num_filters=32, pretrained=False, is_deconv=False
+        self, num_classes=1, num_filters=32, pretrained=False, is_deconv=False,
+        mod=False, mod_chan=4
     ):
         """
         :param num_classes:
@@ -215,14 +212,17 @@ class AlbuNet(nn.Module):
 
         self.relu = nn.ReLU(inplace=True)
 
-        # conv1 = nn.Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
-        # conv1.load_state_dict(self.encoder.conv1.state_dict())
-        # self.conv1 = nn.Sequential(
-        #     conv1, self.encoder.bn1, self.encoder.relu, self.pool
-        # )
+        if mod:
+            enc = self.encoder.conv1
+            conv1 = nn.Conv2d(mod_chan, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+            # conv1.load_state_dict(self.encoder.conv1.state_dict())
+            conv1.weight.data[:, :3].copy_(enc.weight.data[:, :3])
+            conv1.weight.data[:, -1].copy_(enc.weight.data[:, -1])
+        else:
+            conv1 = self.encoder.conv1
 
         self.conv1 = nn.Sequential(
-            self.encoder.conv1, self.encoder.bn1, self.encoder.relu, self.pool
+            conv1, self.encoder.bn1, self.encoder.relu, self.pool
         )
 
         self.conv2 = self.encoder.layer1

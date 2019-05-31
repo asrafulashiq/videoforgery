@@ -7,7 +7,7 @@ from tensorboardX import SummaryWriter
 from tqdm import tqdm
 # custom module
 
-from models import Model as Model
+from models import Model_track as Model
 import config
 from dataset import Dataset_image
 from utils import CustomTransform
