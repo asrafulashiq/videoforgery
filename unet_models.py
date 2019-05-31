@@ -43,7 +43,7 @@ class DecoderBlock(nn.Module):
 
 
 class UNet11(nn.Module):
-    def __init__(self, num_filters=32, pretrained=False):
+    def __init__(self, num_filters=32, pretrained=False, mod=False, mod_chan=4):
         """
         :param num_classes:
         :param num_filters:
@@ -57,7 +57,20 @@ class UNet11(nn.Module):
         self.encoder = models.vgg11(pretrained=pretrained).features
 
         self.relu = self.encoder[1]
-        self.conv1 = self.encoder[0]
+        if mod:
+            enc = self.encoder[0]
+            self.conv1 = enc
+            # self.conv1 = torch.nn.Conv2d(
+            #     mod_chan, enc.out_channels, kernel_size=enc.kernel_size,
+            #     stride=enc.stride, padding=enc.padding)
+            self.conv1.weight.data[:, :3].copy_(enc.weight.data[:, :3])
+            self.conv1.weight.data[:, -1].copy_(enc.weight.data[:, -1])
+            self.conv1.bias.data = enc.bias.data
+            # conv1.weight.data = enc.weight.data
+            self.conv1.load_state_dict(enc.state_dict())
+            # self.conv1 = conv1
+        else:
+            self.conv1 = self.encoder[0]
         self.conv2 = self.encoder[3]
         self.conv3s = self.encoder[6]
         self.conv3 = self.encoder[8]
@@ -201,6 +214,12 @@ class AlbuNet(nn.Module):
         self.encoder = torchvision.models.resnet34(pretrained=pretrained)
 
         self.relu = nn.ReLU(inplace=True)
+
+        # conv1 = nn.Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+        # conv1.load_state_dict(self.encoder.conv1.state_dict())
+        # self.conv1 = nn.Sequential(
+        #     conv1, self.encoder.bn1, self.encoder.relu, self.pool
+        # )
 
         self.conv1 = nn.Sequential(
             self.encoder.conv1, self.encoder.bn1, self.encoder.relu, self.pool

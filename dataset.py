@@ -7,6 +7,29 @@ import skimage
 from skimage import io
 import numpy as np
 import torch
+from torchvision import transforms
+
+
+
+def add_sorp(im, type="pepper"):
+    im = skimage.img_as_float32(im)
+    if type == "pepper":
+        mask = np.ones(im.shape[:2], dtype=np.float32)
+        mask = skimage.util.random_noise(mask, mode=type)
+        if mask.shape != im.shape:
+            mask = mask.reshape(im.shape)
+        im = im * mask
+    elif type == "salt":
+        mask = np.zeros(im.shape[:2], dtype=np.float32)
+        mask = skimage.util.random_noise(mask, mode=type)
+        im = im.copy()
+        if len(im.shape) > 2:
+            im[mask > 0] = (1, 1, 1)
+        else:
+            im[mask > 0] = 1
+
+    return im
+
 
 
 class Dataset_image:
@@ -21,7 +44,10 @@ class Dataset_image:
         self.data_root = self.data_root.expanduser()
         assert self.data_root.exists()
 
-        self.transform = transform
+        if transform is None:
+            self.transform = transforms.ToTensor()
+        else:
+            self.transform = transform
 
         self.mask_root = self.data_root / "gt_mask"
         self.gt_root = self.data_root / "gt"
@@ -44,7 +70,7 @@ class Dataset_image:
                 if _file.suffix == ".png":
                     im_file = str(_file)
                     mask_file = os.path.join(
-                        str(self.mask_root), name.name, (_file.stem + ".jpg")
+                        str(self.mask_root), name.name, (_file.stem + ".png")
                     )
                     try:
                         assert os.path.exists(mask_file)
@@ -54,6 +80,65 @@ class Dataset_image:
                     self.__im_files_with_gt.append((i, im_file, mask_file))
             self.data.append(info)
             self.split_train_test()
+
+    def randomize_mask(self, im):
+        rand = np.random.randint(1, 3)
+        kernel = np.ones((5, 5))
+        if rand == 1:  # erosion
+            im = cv2.erode(im, kernel)
+        elif rand == 2:  # dilation
+            im = cv2.dilate(im, kernel)
+        # elif rand == 3:  # salt
+        #     im = add_sorp(im, type="salt")
+        # elif rand == 4:  # pepper
+        #     im = add_sorp(im, type="pepper")
+        return im
+
+    def load_videos_track(self, shuffle=True):
+        maxlen = self.args.batch_size  # get batch-size numbers frames
+        vid_list = list(self.im_mani_root.iterdir())
+        if shuffle:
+            np.random.shuffle(vid_list)
+
+        counter = 1
+        Im = torch.empty(maxlen, 4, self.args.size, self.args.size)
+        GT = torch.empty(maxlen, 1, self.args.size, self.args.size)
+
+        for name in vid_list:
+            prev_mask = None
+            for i, _file in enumerate(name.iterdir()):
+                if _file.suffix not in (".png", ".jpg"):
+                    continue
+                im_file = str(_file)
+                mask_file = os.path.join(
+                    str(self.mask_root), name.name, (_file.stem + ".png")
+                )
+                try:
+                    assert os.path.exists(mask_file)
+                except AssertionError:
+                    continue
+
+                image, mask = self.__get_im(im_file, mask_file, do_transform=False)
+
+                if self.transform:
+                    image_t, mask_t = self.transform(image, mask)
+
+                if i == 0:
+                    prev_mask = torch.zeros((1, self.args.size, self.args.size),
+                                            dtype=torch.float32)
+
+                Im[counter-1] = torch.cat((image_t, prev_mask), 0)
+                GT[counter-1] = mask_t
+
+                prev_mask = self.randomize_mask(mask)
+                _, prev_mask = self.transform(None, prev_mask)
+
+                if counter % maxlen == 0:
+                    yield Im, GT
+                    counter = 0
+                counter += 1
+        if counter < maxlen and counter > 1:
+            yield Im, GT
 
     def load_data(self, batch=20, is_training=True, shuffle=True):
         counter = 0
@@ -74,6 +159,8 @@ class Dataset_image:
                 Info.append((im_file, mask_file))
                 counter += 1
                 if counter % batch == 0:
+                    if torch.any(torch.isnan(Y)):
+                        import pdb; pdb.set_trace()
                     yield X, Y, Info
                     X = torch.empty(
                         (batch, 3, self.args.size, self.args.size), dtype=torch.float32
@@ -89,37 +176,24 @@ class Dataset_image:
     # def __len__(self):
     #     return len(self.__im_files_with_gt)
 
-    def __get_im(self, im_file, mask_file):
+    def __get_im(self, im_file, mask_file, do_transform=True):
         image = io.imread(im_file)
         image = skimage.img_as_float32(image)  # image in [0-1] range
 
-        _mask = io.imread(mask_file)
+        _mask = skimage.img_as_float32(io.imread(mask_file))
 
         if len(_mask.shape) > 2:
-            mval = (0, 0, 255)
-            ind = _mask[:, :, 2] > mval[2] / 2
+            ind = _mask[:, :, 2] > 0.5
 
             mask = np.zeros(_mask.shape[:2], dtype=np.float32)
             mask[ind] = 1
         else:
-            mask = skimage.img_as_float32(_mask)
+            mask = _mask
 
-        if self.transform:
+        if do_transform and self.transform is not None:
             image, mask = self.transform(image, mask)
 
         return image, mask
-
-    def _add_sorp(self, im, type="pepper"):
-        im = skimage.img_as_float32(im)
-        if type == "pepper":
-            mask = np.ones(im.shape[:2], dtype=np.float32)
-            mask = skimage.util.random_noise(mask, mode=type)
-            im = im * mask[..., None]
-        elif type == "salt":
-            mask = np.zeros(im.shape[:2], dtype=np.float32)
-            mask = skimage.util.random_noise(mask, mode=type)
-            im[mask > 0] = (1, 1, 1)
-        return im
 
     def load_triplet(self, num=10):
         # randomly select one video and get frames (with labels)
@@ -167,7 +241,7 @@ class Dataset_image:
             im_mask_new = mask_new
 
             im_t = self.image_with_mask(im, im_mask_new, type="foreground")
-            im_t = self._add_sorp(im_t, type="salt")
+            # im_t = add_sorp(im_t, type="salt")
 
             src_fname = os.path.join(self.im_mani_root, *src_file.parts[-2:])
             im_src_pos = skimage.img_as_float32(io.imread(src_fname))
@@ -176,7 +250,7 @@ class Dataset_image:
             if data[src_file]["mask_new"] is not None:
                 _mask = data[src_file]["mask_new"]
                 im_src_pos = self.image_with_mask(im_src_pos, _mask, type="background")
-                im_src_pos = self._add_sorp(im_src_pos, type="pepper")
+                # im_src_pos = add_sorp(im_src_pos, type="pepper")
 
             neg_fname = os.path.join(self.im_mani_root, *src_neg_file.parts[-2:])
             im_src_neg = skimage.img_as_float32(io.imread(neg_fname))
@@ -185,7 +259,7 @@ class Dataset_image:
             if data[src_neg_file]["mask_new"] is not None:
                 _mask = data[src_neg_file]["mask_new"]
                 im_src_neg = self.image_with_mask(im_src_neg, _mask, type="background")
-                im_src_neg = self._add_sorp(im_src_neg, type="pepper")
+                # im_src_neg = add_sorp(im_src_neg, type="pepper")
 
             if self.transform:
                 im_t = self.transform(im_t)
@@ -253,7 +327,7 @@ class Dataset_image:
 
                 im = self.image_with_mask(im, im_mask_new, type="background")
 
-            im = self._add_sorp(im, type="pepper")
+            # im = add_sorp(im, type="pepper")
 
             if self.transform:
                 im = self.transform(im)
@@ -261,32 +335,23 @@ class Dataset_image:
 
         return X_im, im_first, match_ind, first_ind
 
-    def get_frames_from_video(self):
+    def get_frames_from_video(self, do_transform=False):
         # randomly select one video and get frames (with labels)
         name = np.random.choice(list(self.im_mani_root.iterdir()))
         for _file in name.iterdir():
             if _file.suffix == ".png":
                 im_file = str(_file)
                 mask_file = os.path.join(
-                    str(self.mask_root), name.name, (_file.stem + ".jpg")
+                    str(self.mask_root), name.name, (_file.stem + ".png")
                 )
                 try:
                     assert os.path.exists(mask_file)
                 except AssertionError:
                     continue
+            image, mask = self.__get_im(im_file, mask_file)
 
-            image = io.imread(im_file)
-            image = skimage.img_as_float32(image)  # image in [0-1] range
-            _mask = io.imread(mask_file)
-
-            if len(_mask.shape) > 2:
-                mval = (0, 0, 255)
-                ind = _mask[:, :, 2] > mval[2] / 2
-
-                mask = np.zeros(_mask.shape[:2], dtype=np.float32)
-                mask[ind] = 1
-            else:
-                mask = skimage.img_as_float32(_mask)
+            if torch.any(torch.isnan(mask)):
+                import pdb; pdb.set_trace()
 
             yield image, mask
 

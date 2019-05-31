@@ -19,12 +19,13 @@ class CustomTransform():
         self.to_tensor = transforms.ToTensor()
 
     def __call__(self, img, mask=None):
-        if img.dtype == np.uint8:
-            img = (img / 255.).astype(np.float32)
+        if img is not None:
+            if img.dtype == np.uint8:
+                img = (img / 255.).astype(np.float32)
 
-        img = cv2.resize(img, self.size)
-        img = (img - self.mean) / self.std
-        img = self.to_tensor(img)
+            img = cv2.resize(img, self.size, 0, 0, cv2.INTER_LINEAR)
+            img = (img - self.mean) / self.std
+            img = self.to_tensor(img)
 
         if mask is not None:
             mask = cv2.resize(mask, self.size)

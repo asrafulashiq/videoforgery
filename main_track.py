@@ -7,12 +7,12 @@ from tensorboardX import SummaryWriter
 from tqdm import tqdm
 # custom module
 
-from models import Model
+from models import Model as Model
 import config
 from dataset import Dataset_image
 from utils import CustomTransform
 from train import train
-from test import test
+from test import test_track
 
 
 if __name__ == "__main__":
@@ -23,7 +23,7 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
 
-    args = config.arg_main()
+    args = config.arg_main_track()
     print(args)
     # seed
     np.random.seed(args.seed)
@@ -40,12 +40,6 @@ if __name__ == "__main__":
     # model
     model = Model().to(device)
 
-    # freeze encoder block
-    # for i, child in enumerate(model.unet.children()):
-    #     if i < 11:
-    #         for par in child.parameters():
-    #             par.requires_grad = False
-
     # optimizer
     optimizer = torch.optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -61,16 +55,17 @@ if __name__ == "__main__":
 
     # train
     if args.test:  # test mode
-        test(dataset, model, args, iteration, device, logger)
+        test_track(dataset, model, args, iteration, device, logger)
     else:  # train
         for ep in tqdm(range(init_ep, args.epoch)):
             # train
-            for x_batch, y_batch, _ in dataset.load_data(args.batch_size, is_training=True):
+            for x_batch, y_batch in dataset.load_videos_track():
                 train(x_batch, y_batch, model, optimizer, args,
                     iteration, device, logger)
                 iteration += 1
-                # if iteration % 10 == 0:
-                #     test(dataset, model, args, iteration, device, logger)
+
+                # if iteration % 1 == 0:
+                #     test_track(dataset, model, args, iteration, device, 10, logger)
 
             # save current state
             torch.save({
@@ -80,6 +75,7 @@ if __name__ == "__main__":
             }, "./ckpt/"+args.model+"_"+args.videoset+".pkl")
 
             # test
-            test(dataset, model, args, iteration, device, logger)
+            test_track(dataset, model, args, iteration, device, num=10,
+                        logger=logger)
 
         logger.close()

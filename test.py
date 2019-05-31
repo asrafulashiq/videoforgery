@@ -19,6 +19,53 @@ from utils import MultiPagePdf
 
 
 @torch.no_grad()
+def test_track(dataset, model, args, iteration, device, num=10, logger=None):
+    model.eval()
+
+    aucs = []
+    f1s = []
+
+    for i in tqdm(range(num)):
+        # counter = 0
+        P = []
+        L = []
+        prev = None
+        for X, labels in dataset.get_frames_from_video(do_transform=True):
+            X = X.to(device)
+            labels = labels.to(device)
+
+            if prev is None:
+                prev = torch.zeros(labels.shape, dtype=torch.float32).to(device)
+
+            inp = torch.cat((X, prev), 0)
+            preds = model(inp.unsqueeze(0))
+            preds = torch.sigmoid(preds)
+            prev = preds.squeeze(0)
+
+            _preds = preds.squeeze().data.cpu().numpy().flatten()
+            _labels = labels.squeeze().data.cpu().numpy().flatten()
+            _labels = (_labels > 0.5).astype(np.float32)
+            P.extend(_preds.tolist())
+            L.extend(_labels.tolist())
+
+        _auc, _f1 = score_report(P, L, args, iteration)
+        aucs.append(_auc)
+        f1s.append(_f1)
+
+    auc_mean = np.mean(aucs)
+    f1_mean = np.mean(f1s)
+
+    print("TEST")
+    print(f"AUC_ROC: {auc_mean: .4f}")
+    print(f"F1 Score: {f1_mean:.4f}")
+
+    if logger is not None:
+        logger.add_scalar("score/f1", f1_mean, iteration)
+        logger.add_scalar("score/auc_roc", auc_mean, iteration)
+
+
+
+@torch.no_grad()
 def test_match_in_the_video(dataset, model, args, iteration, device, logger=None):
     """match an image with forged match in the video
     """
@@ -51,7 +98,7 @@ def test(dataset, model, args, iteration, device, logger=None):
     aucs = []
     f1s = []
 
-    # counter = 0
+    counter = 0
     for X, labels, info in tqdm(dataset.load_data(batch=40, is_training=False)):
         X = X.to(device)
         labels = labels.to(device)
@@ -66,6 +113,10 @@ def test(dataset, model, args, iteration, device, logger=None):
         aucs.append(_auc)
         f1s.append(_f1)
 
+        counter += 1
+        if counter % 3 == 0:
+            break
+
         # plot_samples(preds.data.cpu().numpy(), labels.data.cpu().numpy(), args, info)
         # break
     # score_report(Y_pred, Y_gt, args, iteration, logger)
@@ -73,6 +124,7 @@ def test(dataset, model, args, iteration, device, logger=None):
     auc_mean = np.mean(aucs)
     f1_mean = np.mean(f1s)
 
+    print()
     print("TEST")
     print(f"AUC_ROC: {auc_mean: .4f}")
     print(f"F1 Score: {f1_mean:.4f}")

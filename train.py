@@ -45,7 +45,7 @@ def Index_loss(ysim, ydis, ind_gt, device):
 
 def train_match_in_the_video(
     dataset, model, optimizer, args, iteration, device, logger=None
-):
+    ):
     model.train()
     X_im, Ind = dataset.load_triplet(num=args.batch_size)
     X_im = X_im.to(device)
@@ -68,7 +68,7 @@ def train_match_in_the_video(
 def train(inputs, labels, model, optimizer, args, iteration, device, logger=None):
 
     model.train(True)
-    inputs = inputs.to(device)
+    inputs = inputs.to(device)[:, :3]
     labels = labels.to(device)
 
     # prediction
@@ -78,6 +78,8 @@ def train(inputs, labels, model, optimizer, args, iteration, device, logger=None
 
     optimizer.zero_grad()
     loss.backward()
+
+    nn.utils.clip_grad_norm_(model.parameters(), args.clip)
     optimizer.step()
 
     print(f"Iteration: {iteration}  Loss : {loss.data.cpu().numpy():.4f}")
