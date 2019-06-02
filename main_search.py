@@ -29,5 +29,4 @@ if __name__ == "__main__":
     tsfm = CustomTransform(size=args.size)
     dataset = Dataset_image(args=args, transform=tsfm)
 
-    for i in range(10):
-        test_match_in_the_video(dataset, args, i)
+    test_match_in_the_video(dataset, args)

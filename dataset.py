@@ -287,14 +287,27 @@ class Dataset_image:
 
         if type == "foreground":
             im_masked = im * mask
-        else:
+        elif type == "background":
             im_masked = im * (1 - mask)
+        elif type == "background-bbox":
+            xx, yy = np.nonzero(mask.squeeze())
+            x1, x2, y1, y2 = np.min(xx), np.max(xx), np.min(yy), np.max(yy)
+            mask = np.ones(im.shape[:2], dtype=im.dtype)
+            mask[x1:x2, y1:y2] = 0
+            im_masked = im * mask[..., None]
+        elif type == "foreground-bbox":
+            xx, yy = np.nonzero(mask.squeeze())
+            x1, x2, y1, y2 = np.min(xx), np.max(xx), np.min(yy), np.max(yy)
+            mask = np.zeros(im.shape[:2], dtype=im.dtype)
+            mask[x1:x2, y1:y2] = 1
+            im_masked = im * mask[..., None]
         return im_masked
 
     def get_search_from_video(self):
         # randomly select one video and get frames (with labels)
-        while True:
-            name = np.random.choice(list(self.im_mani_root.iterdir()))
+        for name in list(self.im_mani_root.iterdir()):
+        # while True:
+        #     name = np.random.choice(list(self.im_mani_root.iterdir()))
             gt_file = os.path.join(str(self.gt_root), name.name + ".pkl")
 
             with open(gt_file, "rb") as fp:
@@ -306,41 +319,41 @@ class Dataset_image:
                 if data[f]["mask_orig"] is not None:
                     flag = True
                     break
-            if flag:
-                break
+            if not flag:
+                continue
 
-        num = len(filenames)
-        # X_im = torch.empty(num, 3, self.args.size, self.args.size, dtype=torch.float32)
-        X_im = np.zeros((num, self.args.size, self.args.size, 3), dtype=np.float32)
+            num = len(filenames)
+            # X_im = torch.empty(num, 3, self.args.size, self.args.size, dtype=torch.float32)
+            X_im = np.zeros((num, self.args.size, self.args.size, 3), dtype=np.float32)
 
-        _first = False
-        for i in range(num):
-            ind = i
-            cur_file = filenames[ind]
-            cur_data = data[cur_file]
-            im_mask_new = cur_data["mask_new"]
+            _first = False
+            for i in range(num):
+                ind = i
+                cur_file = filenames[ind]
+                cur_data = data[cur_file]
+                im_mask_new = cur_data["mask_new"]
 
-            fname = os.path.join(self.im_mani_root, *cur_file.parts[-2:])
-            im = skimage.img_as_float32(io.imread(fname))
+                fname = os.path.join(self.im_mani_root, *cur_file.parts[-2:])
+                im = skimage.img_as_float32(io.imread(fname))
 
-            if im_mask_new is not None:
-                if not _first:
-                    im_first = self.image_with_mask(im, im_mask_new,
-                            type="foreground")
-                    _first = True
-                    first_ind = i
-                    match_ind = i - cur_data["offset"]
-                    im_first = cv2.resize(im_first, (self.args.size, self.args.size))
-                    # im_first = self.transform(im_first)
+                if im_mask_new is not None:
+                    if not _first:
+                        im_first = self.image_with_mask(im, im_mask_new,
+                                type="foreground-bbox")
+                        _first = True
+                        first_ind = i
+                        match_ind = i - cur_data["offset"]
+                        im_first = cv2.resize(im_first, (self.args.size, self.args.size))
+                        # im_first = self.transform(im_first)
 
-                im = self.image_with_mask(im, im_mask_new, type="background")
+                    im = self.image_with_mask(im, im_mask_new, type="background-bbox")
 
-            # if self.transform:
-            #     im = self.transform(im)
-            im  = cv2.resize(im, (self.args.size, self.args.size))
-            X_im[i] = im
+                # if self.transform:
+                #     im = self.transform(im)
+                im  = cv2.resize(im, (self.args.size, self.args.size))
+                X_im[i] = im
 
-        return X_im, im_first, match_ind, first_ind
+            yield X_im, im_first, match_ind, first_ind
 
     def get_frames_from_video(self, do_transform=False):
         # randomly select one video and get frames (with labels)

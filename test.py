@@ -18,6 +18,8 @@ import utils
 from utils import MultiPagePdf, add_overlay
 from utils import CustomTransform
 
+import warnings
+warnings.filterwarnings("ignore")
 
 @torch.no_grad()
 def test_track(dataset, model, args, iteration, device, num=10, logger=None):
@@ -101,14 +103,16 @@ def test_track_video(dataset, model, args, iteration, device, num=10, logger=Non
 
 
 @torch.no_grad()
-def test_match_in_the_video(dataset, args, iteration):
+def test_match_in_the_video(dataset, args, tk=3):
     """match an image with forged match in the video
     """
 
     matcher = utils.TemplateMatch(thres=args.thres)
 
-    for cnt in range(10):
-        X, x_ref, gt_ind, first_ind = dataset.get_search_from_video()
+    _top = []
+
+    for cnt, tmp in tqdm(enumerate(dataset.get_search_from_video())):
+        X, x_ref, gt_ind, first_ind = tmp
 
         # X = X.to(device)
         # x_ref = x_ref.to(device)
@@ -122,16 +126,35 @@ def test_match_in_the_video(dataset, args, iteration):
             bbox, val, patched_im = out
             sim_list.append(val)
 
-        sort_ind = np.argsort(sim_list)
+            if i == gt_ind:
+                import pdb
+
+            imname = "tmp2/{}/{}.jpg".format(cnt, i)
+            Path(imname).parent.mkdir(parents=True, exist_ok=True)
+            # skimage.io.imsave(imname, patched_im)
+
+        sort_ind = np.argsort(sim_list)[::-1]
+        k = np.where(sort_ind == gt_ind)[0][0] + 1
         print(
             "{:03d} Target: {:2d}, Matched: {:2d}, topk: {:3d}, GT: {:2d}".format(
                 cnt,
                 first_ind,
                 sort_ind[0],
-                np.where(sort_ind == gt_ind)[0][0] + 1,
+                k,
                 gt_ind,
             )
         )
+
+        _top.append(k)
+
+    # top-k score
+    print("-----------------------")
+
+    for fl in range(1, 6):
+        sc = [1 if i <= fl else 0 for i in _top]
+        print("Top-{} accuracy: {:.2f}".format(
+            fl, np.sum(sc) / len(sc)
+        ))
 
 
 @torch.no_grad()

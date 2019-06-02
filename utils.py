@@ -7,6 +7,7 @@ import numpy as np
 import cv2
 import skimage
 import imutils
+from skimage import io
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
@@ -102,7 +103,7 @@ class TemplateMatch:
 
             # if the resized image is smaller than the template, then break
             # from the loop
-            if iH < template_resized.shape[0] or iW < template_resized.shape[0]:
+            if iH < template_resized.shape[0] or iW < template_resized.shape[1]:
                 break
 
             result = cv2.matchTemplate(image, template_resized,
@@ -122,10 +123,10 @@ class TemplateMatch:
         w, h = int(template.shape[1]*r), int(template.shape[0]*r)
         x, y = maxLoc[:2]
 
-        patched_im = cv2.rectangle(image, (x, y), (x+w-1, y+h-1),
-                                    (255, 0, 0), 4)
+        cv2.rectangle(image, (x, y), (x+w-1, y+h-1),
+                                    (1., 0., 0.), 4)
 
-        return (x, y, w, h), found[0], patched_im
+        return (x, y, w, h), found[0], image
 
 
 class MultiPagePdf:
