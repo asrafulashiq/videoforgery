@@ -65,21 +65,20 @@ def test_track(dataset, model, args, iteration, device, num=10, logger=None):
 
 
 @torch.no_grad()
-def test_track_video(dataset, model, args, iteration, device,
-                     num=10, logger=None):
+def test_track_video(dataset, model, args, iteration, device, num=10, logger=None):
 
     for k in range(25):
         path = "./tmp/{}".format(k)
 
         tsfm = CustomTransform(args.size)
-        for i, (image, label) in tqdm(enumerate(
-                                            dataset.get_frames_from_video())):
+        for i, (image, label) in tqdm(enumerate(dataset.get_frames_from_video())):
             im_tensor = tsfm(image)
             im_tensor = im_tensor.to(device)
 
             if i == 0:
-                prev = torch.zeros((1, args.size, args.size),
-                                dtype=im_tensor.dtype).to(device)
+                prev = torch.zeros((1, args.size, args.size), dtype=im_tensor.dtype).to(
+                    device
+                )
             X = torch.cat((im_tensor, prev), 0)
 
             output = model(X.unsqueeze(0))
@@ -98,36 +97,41 @@ def test_track_video(dataset, model, args, iteration, device,
             nim = skimage.img_as_ubyte(nim)
 
             Path(path).mkdir(exist_ok=True, parents=True)
-            skimage.io.imsave(
-                os.path.join(path, f"{i}.jpg"),
-                nim
-            )
+            skimage.io.imsave(os.path.join(path, f"{i}.jpg"), nim)
 
 
 @torch.no_grad()
-def test_match_in_the_video(dataset, model, args, iteration, device, logger=None):
+def test_match_in_the_video(dataset, args, iteration):
     """match an image with forged match in the video
     """
-    model.eval()
+
+    matcher = utils.TemplateMatch(thres=args.thres)
+
     for cnt in range(10):
         X, x_ref, gt_ind, first_ind = dataset.get_search_from_video()
 
-        X = X.to(device)
-        x_ref = x_ref.to(device)
+        # X = X.to(device)
+        # x_ref = x_ref.to(device)
 
         sim_list = []
         for i in range(X.shape[0]):
-            _input = torch.stack([x_ref, X[i]], 0).to(device).unsqueeze(0)
-            out = model(_input).squeeze()
-            out = torch.sigmoid(out)
-            sim_list.append(
-                out.data.cpu().numpy()
-            )
+            # _input = torch.stack([x_ref, X[i]], 0).to(device).unsqueeze(0)
+            # out = model(_input).squeeze()
+            # out = torch.sigmoid(out)
+            out = matcher.match(X[i], x_ref)
+            bbox, val, patched_im = out
+            sim_list.append(val)
+
         sort_ind = np.argsort(sim_list)
-        print("{:03d} Target: {:2d}, Matched: {:2d}, topk: {:3d}, GT: {:2d}".format(
-            cnt, first_ind, sort_ind[0],
-            np.where(sort_ind==gt_ind)[0][0]+1, gt_ind
-        ))
+        print(
+            "{:03d} Target: {:2d}, Matched: {:2d}, topk: {:3d}, GT: {:2d}".format(
+                cnt,
+                first_ind,
+                sort_ind[0],
+                np.where(sort_ind == gt_ind)[0][0] + 1,
+                gt_ind,
+            )
+        )
 
 
 @torch.no_grad()
@@ -196,7 +200,6 @@ def score_report(y_pred, y_gt, args, iteration, logger=None):
     return auc_roc, f1_score
 
 
-
 def plot_samples(preds, labels, args, info=None):
     num = preds.shape[0]
     out_file_name = args.test_path + "/sample.pdf"
@@ -217,11 +220,9 @@ def plot_samples(preds, labels, args, info=None):
         image = skimage.img_as_float32(image)
 
         # im = utils.overlay_masks(label, pred > args.thres)
-        im = utils.add_overlay(image, label, pred>args.thres)
+        im = utils.add_overlay(image, label, pred > args.thres)
         pdf.plot_one(im)
 
     pdf.final()
     print(f"{out_file_name} created")
-
-
 

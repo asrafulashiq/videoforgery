@@ -5,12 +5,14 @@ from unet_models import UNet11
 from torchvision import transforms
 import numpy as np
 import cv2
+import skimage
+import imutils
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 
-class CustomTransform():
+class CustomTransform:
     def __init__(self, size=224):
         self.size = (size, size)
         self.mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
@@ -21,14 +23,14 @@ class CustomTransform():
     def __call__(self, img, mask=None):
         if img is not None:
             if img.dtype == np.uint8:
-                img = (img / 255.).astype(np.float32)
+                img = (img / 255.0).astype(np.float32)
 
-            img = cv2.resize(img, self.size, interpolation = cv2.INTER_LINEAR)
+            img = cv2.resize(img, self.size, interpolation=cv2.INTER_LINEAR)
             img = (img - self.mean) / self.std
             img = self.to_tensor(img)
 
         if mask is not None:
-            mask = cv2.resize(mask, self.size, interpolation = cv2.INTER_NEAREST)
+            mask = cv2.resize(mask, self.size, interpolation=cv2.INTER_NEAREST)
             mask = self.to_tensor(mask)
 
             return img, mask
@@ -53,6 +55,7 @@ def overlay_masks(m1, m2, alpha=0.5):
 
     return (M1, M2)
 
+
 def add_overlay(im, m1, m2, alpha=0.5):
     r, c = im.shape[:2]
 
@@ -62,12 +65,67 @@ def add_overlay(im, m1, m2, alpha=0.5):
     M1[m1 > 0] = [0, 1, 0]
     M2[m2 > 0] = [1, 0, 0]
 
-    M = cv2.addWeighted(M1, alpha, M2, 1-alpha, 0, None)
+    M = cv2.addWeighted(M1, alpha, M2, 1 - alpha, 0, None)
 
-    I = cv2.addWeighted(im, alpha, M, 1-alpha, 0, None)
+    I = cv2.addWeighted(im, alpha, M, 1 - alpha, 0, None)
 
     return I
 
+
+class TemplateMatch:
+    def __init__(self, range=(0.7, 1.3), thres=0.5):
+        self.scale_range = np.linspace(*range, 20)
+        self.thres = thres
+
+    def get_patch(self, im):
+        # im: image with patch
+        x, y = np.nonzero(im)
+        x1, x2, y1, y2 = np.min(x), np.max(x), np.min(y), np.max(y)
+        patch = im[x1:x2, y1:y2]
+        return patch
+
+    def match(self, image, im_template):
+        # convert image to gray
+        image = skimage.color.rgb2gray(image)
+        im_template = skimage.color.rgb2gray(im_template)
+        template = self.get_patch(im_template)
+
+        found = None
+        (iH, iW) = image.shape[:2]
+
+        # loop over the scales of the image
+        for scale in self.scale_range:
+
+            template_resized = imutils.resize(template,
+                                        width=int(template.shape[1]*scale))
+            r = scale
+
+            # if the resized image is smaller than the template, then break
+            # from the loop
+            if iH < template_resized.shape[0] or iW < template_resized.shape[0]:
+                break
+
+            result = cv2.matchTemplate(image, template_resized,
+                            cv2.TM_CCOEFF_NORMED)
+            (_, maxVal, _, maxLoc) = cv2.minMaxLoc(result)
+
+            # if we have found a new maximum correlation value, then ipdate
+            # the bookkeeping variable
+            if found is None or maxVal > found[0]:
+                found = (maxVal, maxLoc, r)
+                # print("----------")
+                # print("max val : ", maxVal, " r :", 1 / r)
+
+        # unpack the bookkeeping varaible and compute the (x, y) coordinates
+        # of the bounding box based on the resized ratio
+        (_, maxLoc, r) = found
+        w, h = int(template.shape[1]*r), int(template.shape[0]*r)
+        x, y = maxLoc[:2]
+
+        patched_im = cv2.rectangle(image, (x, y), (x+w-1, y+h-1),
+                                    (255, 0, 0), 4)
+
+        return (x, y, w, h), found[0], patched_im
 
 
 class MultiPagePdf:
@@ -87,7 +145,7 @@ class MultiPagePdf:
         self.out_name = out_name
 
         # create figure and axes
-        total_pages = int(np.ceil(total_im/(nrows*ncols)))
+        total_pages = int(np.ceil(total_im / (nrows * ncols)))
 
         self.figs = []
         self.axes = []
@@ -115,4 +173,4 @@ class MultiPagePdf:
         with PdfPages(self.out_name) as pdf:
             for fig in self.figs:
                 pdf.savefig(fig)
-        plt.close('all')
+        plt.close("all")

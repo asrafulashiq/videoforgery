@@ -310,7 +310,8 @@ class Dataset_image:
                 break
 
         num = len(filenames)
-        X_im = torch.empty(num, 3, self.args.size, self.args.size, dtype=torch.float32)
+        # X_im = torch.empty(num, 3, self.args.size, self.args.size, dtype=torch.float32)
+        X_im = np.zeros((num, self.args.size, self.args.size, 3), dtype=np.float32)
 
         _first = False
         for i in range(num):
@@ -324,18 +325,19 @@ class Dataset_image:
 
             if im_mask_new is not None:
                 if not _first:
-                    im_first = self.image_with_mask(im, im_mask_new, type="foreground")
+                    im_first = self.image_with_mask(im, im_mask_new,
+                            type="foreground")
                     _first = True
                     first_ind = i
                     match_ind = i - cur_data["offset"]
-                    im_first = self.transform(im_first)
+                    im_first = cv2.resize(im_first, (self.args.size, self.args.size))
+                    # im_first = self.transform(im_first)
 
                 im = self.image_with_mask(im, im_mask_new, type="background")
 
-            # im = add_sorp(im, type="pepper")
-
-            if self.transform:
-                im = self.transform(im)
+            # if self.transform:
+            #     im = self.transform(im)
+            im  = cv2.resize(im, (self.args.size, self.args.size))
             X_im[i] = im
 
         return X_im, im_first, match_ind, first_ind
