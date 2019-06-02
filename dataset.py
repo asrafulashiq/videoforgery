@@ -353,10 +353,8 @@ class Dataset_image:
                     assert os.path.exists(mask_file)
                 except AssertionError:
                     continue
-            image, mask = self.__get_im(im_file, mask_file)
-
-            if torch.any(torch.isnan(mask)) or torch.any(mask < 0):
-                import pdb; pdb.set_trace()
+            image, mask = self.__get_im(im_file, mask_file,
+                                        do_transform=do_transform)
 
             yield image, mask
 

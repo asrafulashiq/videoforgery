@@ -15,7 +15,8 @@ from tqdm import tqdm
 from sklearn import metrics
 
 import utils
-from utils import MultiPagePdf
+from utils import MultiPagePdf, add_overlay
+from utils import CustomTransform
 
 
 @torch.no_grad()
@@ -63,6 +64,45 @@ def test_track(dataset, model, args, iteration, device, num=10, logger=None):
         logger.add_scalar("score/auc_roc", auc_mean, iteration)
 
 
+@torch.no_grad()
+def test_track_video(dataset, model, args, iteration, device,
+                     num=10, logger=None):
+
+    for k in range(25):
+        path = "./tmp/{}".format(k)
+
+        tsfm = CustomTransform(args.size)
+        for i, (image, label) in tqdm(enumerate(
+                                            dataset.get_frames_from_video())):
+            im_tensor = tsfm(image)
+            im_tensor = im_tensor.to(device)
+
+            if i == 0:
+                prev = torch.zeros((1, args.size, args.size),
+                                dtype=im_tensor.dtype).to(device)
+            X = torch.cat((im_tensor, prev), 0)
+
+            output = model(X.unsqueeze(0))
+            output = torch.sigmoid(output)
+            prev = output.reshape((1, args.size, args.size)).clone()
+
+            output = output.squeeze()
+
+            output = output.data.cpu().numpy()
+            output = (output > args.thres).astype(np.float32)
+
+            pred = skimage.transform.resize(output, image.shape[:2])
+
+            # overlay two mask
+            nim = add_overlay(image, label, pred)
+            nim = skimage.img_as_ubyte(nim)
+
+            Path(path).mkdir(exist_ok=True, parents=True)
+            skimage.io.imsave(
+                os.path.join(path, f"{i}.jpg"),
+                nim
+            )
+
 
 @torch.no_grad()
 def test_match_in_the_video(dataset, model, args, iteration, device, logger=None):
@@ -98,6 +138,8 @@ def test(dataset, model, args, iteration, device, logger=None):
     f1s = []
 
     counter = 0
+    P = []
+    L = []
     for X, labels, info in tqdm(dataset.load_data(batch=40, is_training=False)):
         X = X.to(device)
         labels = labels.to(device)
@@ -108,17 +150,28 @@ def test(dataset, model, args, iteration, device, logger=None):
         labels = labels.squeeze().data.cpu().numpy()
         labels = (labels > 0).astype(np.float32)
 
-        _auc, _f1 = score_report(preds.flatten(), labels.flatten(), args, iteration)
-        aucs.append(_auc)
-        f1s.append(_f1)
+        P.extend(preds.flatten().tolist())
+        L.extend(labels.flatten().tolist())
+
+        # _auc, _f1 = score_report(preds.flatten(), labels.flatten(), args, iteration)
+        # aucs.append(_auc)
+        # f1s.append(_f1)
 
         counter += 1
-        if counter % 3 == 0:
-            break
+        if counter % 15 == 0:
+            _auc, _f1 = score_report(P, L, args, iteration)
+            aucs.append(_auc)
+            f1s.append(_f1)
+            P = []
+            L = []
 
         # plot_samples(preds.data.cpu().numpy(), labels.data.cpu().numpy(), args, info)
         # break
     # score_report(Y_pred, Y_gt, args, iteration, logger)
+    if len(P) > 4e5:
+        _auc, _f1 = score_report(P, L, args, iteration)
+        aucs.append(_auc)
+        f1s.append(_f1)
 
     auc_mean = np.mean(aucs)
     f1_mean = np.mean(f1s)

@@ -12,7 +12,7 @@ import config
 from dataset import Dataset_image
 from utils import CustomTransform
 from train import train
-from test import test_track
+from test import test_track, test_track_video
 
 
 if __name__ == "__main__":
@@ -55,7 +55,8 @@ if __name__ == "__main__":
 
     # train
     if args.test:  # test mode
-        test_track(dataset, model, args, iteration, device, logger)
+        test_track_video(dataset, model, args, iteration,
+                         device, num=50, logger=logger)
     else:  # train
         for ep in tqdm(range(init_ep, args.epoch)):
             # train
@@ -75,7 +76,7 @@ if __name__ == "__main__":
             }, "./ckpt/"+args.model+"_"+args.videoset+".pkl")
 
             # test
-            test_track(dataset, model, args, iteration, device, num=10,
+            test_track(dataset, model, args, iteration, device, num=20,
                         logger=logger)
 
         logger.close()

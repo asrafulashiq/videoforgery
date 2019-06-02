@@ -20,7 +20,7 @@ class Model_track(nn.Module):
 class Model(nn.Module):
     def __init__(self, pretrained=True):
         super().__init__()
-        # self.unet = UNet11(pretrained=pretrained, mod=True, mod_chan=3)
+        # self.net = UNet11(pretrained=pretrained)
         self.net = AlbuNet(pretrained=True)
 
     def forward(self, x):
