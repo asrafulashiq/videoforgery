@@ -79,7 +79,7 @@ class Dataset_image:
                     info["files"].append((im_file, mask_file))
                     self.__im_files_with_gt.append((i, im_file, mask_file))
             self.data.append(info)
-            self.split_train_test()
+        self.split_train_test()
 
     def randomize_mask(self, im):
         rand = np.random.randint(1, 3)
@@ -94,25 +94,28 @@ class Dataset_image:
         #     im = add_sorp(im, type="pepper")
         return im
 
-    def load_videos_track(self, shuffle=True):
-        maxlen = self.args.batch_size  # get batch-size numbers frames
-        vid_list = list(self.im_mani_root.iterdir())
-        if shuffle:
-            np.random.shuffle(vid_list)
+    def load_videos_track(self, is_training=True):
 
-        counter = 1
-        Im = torch.zeros(maxlen, 4, self.args.size, self.args.size)
-        GT = torch.zeros(maxlen, 1, self.args.size, self.args.size)
+        for cnt, inf in enumerate(self.data):
 
-        for name in vid_list:
+            if is_training and cnt not in self.train_index:
+                continue
+            if not is_training and cnt not in self.test_index:
+                continue
+
+            if is_training:
+                maxlen = self.args.batch_size
+            else:
+                maxlen = len(inf['files'])
+            Im = torch.zeros(maxlen, 4, self.args.size, self.args.size)
+            GT = torch.zeros(maxlen, 1, self.args.size, self.args.size)
+
             prev_mask = None
-            for i, _file in enumerate(name.iterdir()):
-                if _file.suffix not in (".png", ".jpg"):
-                    continue
-                im_file = str(_file)
-                mask_file = os.path.join(
-                    str(self.mask_root), name.name, (_file.stem + ".png")
-                )
+            counter = 1
+
+            for i, (im_file, mask_file)  in enumerate(inf['files']):
+                im_file = str(im_file)
+                mask_file = str(mask_file)
                 try:
                     assert os.path.exists(mask_file)
                 except AssertionError:
@@ -139,6 +142,7 @@ class Dataset_image:
                     GT = torch.zeros(maxlen, 1, self.args.size, self.args.size)
                     counter = 0
                 counter += 1
+
 
     def load_data(self, batch=20, is_training=True, shuffle=True):
         counter = 0
@@ -357,6 +361,7 @@ class Dataset_image:
 
     def get_frames_from_video(self, do_transform=False):
         # randomly select one video and get frames (with labels)
+
         name = np.random.choice(list(self.im_mani_root.iterdir()))
         for _file in name.iterdir():
             if _file.suffix == ".png":

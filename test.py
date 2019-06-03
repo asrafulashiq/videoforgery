@@ -22,20 +22,27 @@ import warnings
 warnings.filterwarnings("ignore")
 
 @torch.no_grad()
-def test_track(dataset, model, args, iteration, device, num=10, logger=None):
+def test_track(dataset, model, args, iteration, device, num=None, logger=None):
     model.eval()
 
     aucs = []
     f1s = []
     P = []
     L = []
-    for i in tqdm(range(num)):
+
+    counter = 0
+
+    for cnt, (X_all, Y_all) in tqdm(enumerate(dataset.load_videos_track(is_training=False))):
         # counter = 0
         prev = None
-        for X, labels in dataset.get_frames_from_video(do_transform=True):
+        _len = X_all.shape[0]
+        for i in range(_len):
+            X = X_all[i, :3]
+            labels = Y_all[i]
+
             X = X.to(device)
             labels = labels.to(device)
-            if prev is None:
+            if i == 0:
                 prev = torch.zeros(labels.shape, dtype=torch.float32).to(device)
 
             inp = torch.cat((X, prev), 0)
@@ -49,13 +56,16 @@ def test_track(dataset, model, args, iteration, device, num=10, logger=None):
             P.extend(_preds.tolist())
             L.extend(_labels.tolist())
 
-        # _auc, _f1 = score_report(P, L, args, iteration)
-        # aucs.append(_auc)
-        # f1s.append(_f1)
+            counter += 1
+            if counter % 60 == 0:
+                _auc, _f1 = score_report(P, L, args, iteration)
+                aucs.append(_auc)
+                f1s.append(_f1)
+                P = []
+                L = []
+        if num is not None and cnt >= num:
+            break
     auc_mean, f1_mean = score_report(P, L, args, iteration)
-
-    # auc_mean = np.mean(aucs)
-    # f1_mean = np.mean(f1s)
 
     print("TEST")
     print(f"AUC_ROC: {auc_mean: .4f}")
@@ -175,7 +185,7 @@ def test(dataset, model, args, iteration, device, logger=None):
 
         preds = preds.squeeze().data.cpu().numpy()
         labels = labels.squeeze().data.cpu().numpy()
-        labels = (labels > 0).astype(np.float32)
+        labels = (labels > 0.5).astype(np.float32)
 
         P.extend(preds.flatten().tolist())
         L.extend(labels.flatten().tolist())

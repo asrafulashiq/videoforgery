@@ -20,11 +20,11 @@ class Model_track(nn.Module):
 class Model(nn.Module):
     def __init__(self, pretrained=True):
         super().__init__()
-        # self.net = UNet11(pretrained=pretrained)
-        self.net = AlbuNet(pretrained=True)
+        self.unet = UNet11(pretrained=pretrained)
+        # self.net = AlbuNet(pretrained=True)
 
     def forward(self, x):
-        x = self.net(x)
+        x = self.unet(x)
         return x
 
 
