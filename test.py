@@ -56,16 +56,23 @@ def test_track(dataset, model, args, iteration, device, num=None, logger=None):
             P.extend(_preds.tolist())
             L.extend(_labels.tolist())
 
-            counter += 1
-            if counter % 60 == 0:
-                _auc, _f1 = score_report(P, L, args, iteration)
-                aucs.append(_auc)
-                f1s.append(_f1)
-                P = []
-                L = []
+            # counter += 1
+            # if counter % 120 == 0:
+            #     _auc, _f1 = score_report(P, L, args, iteration)
+            #     aucs.append(_auc)
+            #     f1s.append(_f1)
+            #     P = []
+            #     L = []
         if num is not None and cnt >= num:
             break
-    auc_mean, f1_mean = score_report(P, L, args, iteration)
+
+    if len(P) > 5 * 4e5:
+        _auc, _f1 = score_report(P, L, args, iteration)
+        aucs.append(_auc)
+        f1s.append(_f1)
+
+    auc_mean = np.mean(aucs)
+    f1_mean = np.mean(f1s)
 
     print("TEST")
     print(f"AUC_ROC: {auc_mean: .4f}")
@@ -112,7 +119,6 @@ def test_track_video(dataset, model, args, iteration, device, num=10, logger=Non
             skimage.io.imsave(os.path.join(path, f"{i}.jpg"), nim)
 
 
-@torch.no_grad()
 def test_match_in_the_video(dataset, args, tk=3):
     """match an image with forged match in the video
     """
@@ -194,13 +200,13 @@ def test(dataset, model, args, iteration, device, logger=None):
         # aucs.append(_auc)
         # f1s.append(_f1)
 
-        counter += 1
-        if counter % 15 == 0:
-            _auc, _f1 = score_report(P, L, args, iteration)
-            aucs.append(_auc)
-            f1s.append(_f1)
-            P = []
-            L = []
+        # counter += 1
+        # if counter % 50 == 0:
+        #     _auc, _f1 = score_report(P, L, args, iteration)
+        #     aucs.append(_auc)
+        #     f1s.append(_f1)
+        #     P = []
+        #     L = []
 
         # plot_samples(preds.data.cpu().numpy(), labels.data.cpu().numpy(), args, info)
         # break

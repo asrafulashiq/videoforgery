@@ -10,7 +10,6 @@ import torch
 from torchvision import transforms
 
 
-
 def add_sorp(im, type="pepper"):
     im = skimage.img_as_float32(im)
     if type == "pepper":
@@ -29,7 +28,6 @@ def add_sorp(im, type="pepper"):
             im[mask > 0] = 1
 
     return im
-
 
 
 class Dataset_image:
@@ -106,14 +104,15 @@ class Dataset_image:
             if is_training:
                 maxlen = self.args.batch_size
             else:
-                maxlen = len(inf['files'])
+                maxlen = len(inf["files"])
+
             Im = torch.zeros(maxlen, 4, self.args.size, self.args.size)
             GT = torch.zeros(maxlen, 1, self.args.size, self.args.size)
 
             prev_mask = None
             counter = 1
 
-            for i, (im_file, mask_file)  in enumerate(inf['files']):
+            for i, (im_file, mask_file) in enumerate(inf["files"]):
                 im_file = str(im_file)
                 mask_file = str(mask_file)
                 try:
@@ -127,11 +126,12 @@ class Dataset_image:
                     image_t, mask_t = self.transform(image, mask)
 
                 if i == 0:
-                    prev_mask = torch.zeros((1, self.args.size, self.args.size),
-                                            dtype=torch.float32)
+                    prev_mask = torch.zeros(
+                        (1, self.args.size, self.args.size), dtype=torch.float32
+                    )
 
-                Im[counter-1] = torch.cat((image_t, prev_mask), 0)
-                GT[counter-1] = mask_t
+                Im[counter - 1] = torch.cat((image_t, prev_mask), 0)
+                GT[counter - 1] = mask_t
 
                 prev_mask = self.randomize_mask(mask)
                 _, prev_mask = self.transform(None, prev_mask)
@@ -142,7 +142,6 @@ class Dataset_image:
                     GT = torch.zeros(maxlen, 1, self.args.size, self.args.size)
                     counter = 0
                 counter += 1
-
 
     def load_data(self, batch=20, is_training=True, shuffle=True):
         counter = 0
@@ -164,11 +163,15 @@ class Dataset_image:
                 counter += 1
                 if counter % batch == 0:
                     if torch.any(torch.isnan(Y)):
-                        import pdb; pdb.set_trace()
+                        import pdb
+
+                        pdb.set_trace()
                     yield X, Y, Info
 
                     if torch.any(Y < 0):
-                        import pdb; pdb.set_trace()
+                        import pdb
+
+                        pdb.set_trace()
                     X = torch.zeros(
                         (batch, 3, self.args.size, self.args.size), dtype=torch.float32
                     )
@@ -177,7 +180,6 @@ class Dataset_image:
                     )
                     Info = []
                     counter = 0
-
 
     # def __len__(self):
     #     return len(self.__im_files_with_gt)
@@ -200,7 +202,9 @@ class Dataset_image:
             image, mask = self.transform(image, mask)
 
             if torch.any(mask < 0):
-                import pdb; pdb.set_trace()
+                import pdb
+
+                pdb.set_trace()
 
         return image, mask
 
@@ -307,11 +311,13 @@ class Dataset_image:
             im_masked = im * mask[..., None]
         return im_masked
 
-    def get_search_from_video(self):
+    def get_search_from_video(self, first_only=True):
         # randomly select one video and get frames (with labels)
-        for name in list(self.im_mani_root.iterdir()):
-        # while True:
-        #     name = np.random.choice(list(self.im_mani_root.iterdir()))
+        lists = list(self.im_mani_root.iterdir())
+        np.random.shuffle(lists)
+        for name in lists:
+            # while True:
+            #     name = np.random.choice(list(self.im_mani_root.iterdir()))
             gt_file = os.path.join(str(self.gt_root), name.name + ".pkl")
 
             with open(gt_file, "rb") as fp:
@@ -331,6 +337,7 @@ class Dataset_image:
             X_im = np.zeros((num, self.args.size, self.args.size, 3), dtype=np.float32)
 
             _first = False
+            X_ref = None
             for i in range(num):
                 ind = i
                 cur_file = filenames[ind]
@@ -342,22 +349,36 @@ class Dataset_image:
 
                 if im_mask_new is not None:
                     if not _first:
-                        im_first = self.image_with_mask(im, im_mask_new,
-                                type="foreground-bbox")
+                        im_first = self.image_with_mask(
+                            im, im_mask_new, type="foreground-bbox"
+                        )
                         _first = True
                         first_ind = i
                         match_ind = i - cur_data["offset"]
-                        im_first = cv2.resize(im_first, (self.args.size, self.args.size))
+                        im_first = cv2.resize(
+                            im_first, (self.args.size, self.args.size)
+                        )
+
                         # im_first = self.transform(im_first)
+                    if not first_only:
+                        if X_ref is None:
+                            X_ref = im_first[None, ...]
+                        else:
+                            im_ref = self.image_with_mask(
+                                im, im_mask_new, type="foreground-bbox"
+                            )
+                            im_ref = cv2.resize(
+                                im_ref, (self.args.size, self.args.size)
+                            )
+                            X_ref = np.concatenate((X_ref, im_ref[None, ...]), 0)
 
                     im = self.image_with_mask(im, im_mask_new, type="background-bbox")
 
                 # if self.transform:
                 #     im = self.transform(im)
-                im  = cv2.resize(im, (self.args.size, self.args.size))
+                im = cv2.resize(im, (self.args.size, self.args.size))
                 X_im[i] = im
-
-            yield X_im, im_first, match_ind, first_ind
+            yield X_im, X_ref, match_ind, first_ind
 
     def get_frames_from_video(self, do_transform=False):
         # randomly select one video and get frames (with labels)
@@ -373,8 +394,7 @@ class Dataset_image:
                     assert os.path.exists(mask_file)
                 except AssertionError:
                     continue
-            image, mask = self.__get_im(im_file, mask_file,
-                                        do_transform=do_transform)
+            image, mask = self.__get_im(im_file, mask_file, do_transform=do_transform)
 
             yield image, mask
 

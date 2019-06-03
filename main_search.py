@@ -13,20 +13,13 @@ from tqdm import tqdm
 from models import Model_comp
 import config
 from dataset import Dataset_image
-from utils import CustomTransform
-from train import train_match_in_the_video
-from test import test_match_in_the_video
 
-
-if torch.cuda.is_available():
-    torch.set_default_tensor_type(torch.cuda.FloatTensor)
-
+from vid_match import match_in_the_video
 
 if __name__ == "__main__":
 
     args = config.arg_main_search()
 
-    tsfm = CustomTransform(size=args.size)
-    dataset = Dataset_image(args=args, transform=tsfm)
+    dataset = Dataset_image(args=args, transform=None)
 
-    test_match_in_the_video(dataset, args)
+    match_in_the_video(dataset, args)
