@@ -92,6 +92,59 @@ class Dataset_image:
         #     im = add_sorp(im, type="pepper")
         return im
 
+
+    def load_videos_all(self):
+        for ind in self.test_index:
+            D = self.data[ind]
+            name = D['name']
+            files = D['files']
+            gt_file = os.path.join(str(self.gt_root), Path(name).name + ".pkl")
+
+            with open(gt_file, "rb") as fp:
+                data = pickle.load(fp)
+
+            filenames = list(data.keys())
+            offset = data[filenames[0]]["offset"]
+
+            _len = len(filenames)
+            X = np.zeros((_len, self.args.size, self.args.size, 3))
+            Y_red = np.zeros((_len, self.args.size, self.args.size))
+            Y_green = np.zeros((_len, self.args.size, self.args.size))
+
+            flag = False
+            forge_time = None
+            gt_time = None
+            for i, cur_file in enumerate(sorted(filenames)):
+                cur_data = data[cur_file]
+                mask_orig = cur_data["mask_orig"]
+                mask_new = cur_data["mask_new"]
+                offset = cur_data["offset"]
+
+                if mask_orig is not None and not flag:
+                    forge_time = [i, -1]
+                    gt_time = [i-offset, -1]
+                    flag = True
+
+                if mask_orig is None and flag:
+                    gt_time[1] = i
+                    forge_time[1] = i - offset
+
+                fname = os.path.join(self.im_mani_root, *cur_file.parts[-2:])
+                im = skimage.img_as_float32(io.imread(fname))
+
+                X[i] = cv2.resize(im, (self.args.size, self.args.size))
+                if mask_new is None:
+                    mask_new = np.zeros((self.args.size, self.args.size))
+                    mask_orig = np.zeros((self.args.size, self.args.size))
+                Y_red[i] = cv2.resize(mask_orig, (self.args.size, self.args.size))
+                Y_green[i-offset] = cv2.resize(mask_new, (self.args.size, self.args.size))
+
+            if forge_time is not None and forge_time[1] == -1:
+                forge_time[1] = i
+                gt_time[1] = i - offset
+            yield X, Y_red, forge_time, Y_green, gt_time, name
+
+
     def load_videos_track(self, is_training=True):
 
         for cnt, inf in enumerate(self.data):
@@ -380,16 +433,14 @@ class Dataset_image:
                 X_im[i] = im
             yield X_im, X_ref, match_ind, first_ind
 
-    def get_frames_from_video(self, do_transform=False):
+    def get_frames_from_video(self, do_transform=False,
+                              get_all=False, is_test=False):
         # randomly select one video and get frames (with labels)
-
-        name = np.random.choice(list(self.im_mani_root.iterdir()))
-        for _file in name.iterdir():
+        name = np.random.choice(self.data)
+        for im_file, mask_file in name["file"]:
             if _file.suffix == ".png":
-                im_file = str(_file)
-                mask_file = os.path.join(
-                    str(self.mask_root), name.name, (_file.stem + ".png")
-                )
+                im_file = str(im_file)
+                mask_file = str(mask_file)
                 try:
                     assert os.path.exists(mask_file)
                 except AssertionError:
@@ -397,4 +448,3 @@ class Dataset_image:
             image, mask = self.__get_im(im_file, mask_file, do_transform=do_transform)
 
             yield image, mask
-

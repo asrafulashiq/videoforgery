@@ -40,6 +40,33 @@ class CustomTransform:
             return img
 
 
+def image_with_mask(im, mask, type="foreground"):
+    im = skimage.img_as_float32(im)
+    mask = skimage.img_as_float32(mask)
+
+    if len(im.shape) > len(mask.shape):
+        mask = mask[..., None]
+
+    if type == "foreground":
+        im_masked = im * mask
+    elif type == "background":
+        im_masked = im * (1 - mask)
+    elif type == "background-bbox":
+        xx, yy = np.nonzero(mask.squeeze())
+        x1, x2, y1, y2 = np.min(xx), np.max(xx), np.min(yy), np.max(yy)
+        mask = np.ones(im.shape[:2], dtype=im.dtype)
+        mask[x1:x2, y1:y2] = 0
+        im_masked = im * mask[..., None]
+    elif type == "foreground-bbox":
+        xx, yy = np.nonzero(mask.squeeze())
+        x1, x2, y1, y2 = np.min(xx), np.max(xx), np.min(yy), np.max(yy)
+        mask = np.zeros(im.shape[:2], dtype=im.dtype)
+        mask[x1:x2, y1:y2] = 1
+        im_masked = im * mask[..., None]
+    return im_masked
+
+
+
 def overlay_masks(m1, m2, alpha=0.5):
     """overlay two boolean mask
 
