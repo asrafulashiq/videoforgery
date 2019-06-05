@@ -17,6 +17,7 @@ from utils import CustomTransform
 import utils
 from train import train
 from test import test
+import vid_match
 
 
 if __name__ == "__main__":
@@ -43,13 +44,15 @@ if __name__ == "__main__":
         checkpoint = torch.load(args.ckpt)
         model.load_state_dict(checkpoint["model_state"])
 
-    for cnt, dat in enumerate(dataset.load_videos_all()):
+    for cnt, dat in (enumerate(dataset.load_videos_all())):
         # work with a particular video
         X, Y_red, forge_time, Y_green, gt_time, vid_name = dat
 
-        Pred = np.zeros(X.shape[:3])
+        Pred = np.zeros(X.shape[:3], dtype=np.float32)
 
-        for i in tqdm(range(X.shape[0])):
+        act_ind = []
+
+        for i in (range(X.shape[0])):
             x_im = X[i]
             x_im = tsfm(x_im.astype(np.float32)).to(device)
             pred = model(x_im.unsqueeze(0))
@@ -73,15 +76,41 @@ if __name__ == "__main__":
                 pred_lab[pred_lab == max_lab] = 1
                 pred_lab = pred_lab.astype(np.float)
 
-                # if np.sum(pred_lab) / (args.size**2) < 0.05:
-                #     pred_lab = np.zeros_like(pred_lab)
+                if np.sum(pred_lab) / (args.size**2) < 0.02:
+                    pred_lab = np.zeros_like(pred_lab)
+                else:
+                    act_ind.append(i)
 
             Pred[i] = pred_lab
 
             #! TEST
-            pp = utils.image_with_mask(X[i], pred_lab, type="foreground")
-            path = Path(f"tmp/{cnt}")
-            path.mkdir(parents=True, exist_ok=True)
-            io.imsave(str(path/f"{i}.jpg"), pp)
+            # pp = utils.image_with_mask(X[i], pred_lab, type="foreground", blend=True)
+            # path = Path(f"tmp_all/{cnt}")
+            # path.mkdir(parents=True, exist_ok=True)
+            # io.imsave(str(path/f"{i}.jpg"), skimage.img_as_ubyte(pp))
 
 
+        # match
+        matcher = utils.TemplateMatch(thres=args.thres)
+
+        if forge_time is None:
+            continue
+
+
+        X_ref = Pred[act_ind]
+
+        pred_t = vid_match.template_vid(X, X_ref, matcher)
+
+        iou_copy = utils.iou_time(gt_time, pred_t)
+
+        if act_ind:
+            strt = act_ind[0]
+            if len(act_ind) == 1:
+                end = X.shape[0]
+            else:
+                end = act_ind[-1]
+            pred_forge_time = (strt, end)
+
+        iou_move = utils.iou_time(forge_time, pred_forge_time)
+
+        print(f"{cnt}: IoU -  move {iou_move:.2f}  copy : {iou_copy:.2f}")

@@ -17,6 +17,34 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
+def template_vid(X, X_ref, matcher):
+
+    if X_ref.size == 0:
+        return []
+
+    sim_list = np.zeros((X_ref.shape[0], X.shape[0]), dtype=np.float)
+    for i in range(X_ref.shape[0]):
+        for j in range(X.shape[0]):
+            out = matcher.match(X[j], X_ref[i])
+            bbox, val, patched_im = out
+            sim_list[i, j] = val
+
+    gt_len = X_ref.shape[0]
+
+    arr0 = np.arange(gt_len)
+    flag = [-1, -1]
+    for k in range(0, X.shape[0]-gt_len):
+        arr = arr0 + k
+        val = sim_list[arr0, arr]
+        prod = np.prod(val)
+
+        if prod > flag[0]:
+            flag = (prod, k)
+
+    return (flag[1], flag[1]+gt_len)
+
+
+
 def match_in_the_video(dataset, args):
     """match an image with forged match in the video
     """

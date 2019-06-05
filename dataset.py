@@ -107,9 +107,9 @@ class Dataset_image:
             offset = data[filenames[0]]["offset"]
 
             _len = len(filenames)
-            X = np.zeros((_len, self.args.size, self.args.size, 3))
-            Y_red = np.zeros((_len, self.args.size, self.args.size))
-            Y_green = np.zeros((_len, self.args.size, self.args.size))
+            X = np.zeros((_len, self.args.size, self.args.size, 3), dtype=np.float32)
+            Y_red = np.zeros((_len, self.args.size, self.args.size), dtype=np.float32)
+            Y_green = np.zeros((_len, self.args.size, self.args.size), dtype=np.float32)
 
             flag = False
             forge_time = None
@@ -134,8 +134,8 @@ class Dataset_image:
 
                 X[i] = cv2.resize(im, (self.args.size, self.args.size))
                 if mask_new is None:
-                    mask_new = np.zeros((self.args.size, self.args.size))
-                    mask_orig = np.zeros((self.args.size, self.args.size))
+                    mask_new = np.zeros((self.args.size, self.args.size), dtype=np.float32)
+                    mask_orig = np.zeros((self.args.size, self.args.size), dtype=np.float32)
                 Y_red[i] = cv2.resize(mask_orig, (self.args.size, self.args.size))
                 Y_green[i-offset] = cv2.resize(mask_new, (self.args.size, self.args.size))
 
@@ -437,8 +437,8 @@ class Dataset_image:
                               get_all=False, is_test=False):
         # randomly select one video and get frames (with labels)
         name = np.random.choice(self.data)
-        for im_file, mask_file in name["file"]:
-            if _file.suffix == ".png":
+        for im_file, mask_file in name["files"]:
+            if Path(im_file).suffix == ".png":
                 im_file = str(im_file)
                 mask_file = str(mask_file)
                 try:

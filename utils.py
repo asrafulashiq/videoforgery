@@ -40,7 +40,7 @@ class CustomTransform:
             return img
 
 
-def image_with_mask(im, mask, type="foreground"):
+def image_with_mask(im, mask, type="foreground", blend=False):
     im = skimage.img_as_float32(im)
     mask = skimage.img_as_float32(mask)
 
@@ -63,8 +63,12 @@ def image_with_mask(im, mask, type="foreground"):
         mask = np.zeros(im.shape[:2], dtype=im.dtype)
         mask[x1:x2, y1:y2] = 1
         im_masked = im * mask[..., None]
+    if blend:
+        blend_ratio = 0.3
+        im_masked = cv2.addWeighted(
+            im, blend_ratio, im_masked, 1 - blend_ratio, 0, None
+        )
     return im_masked
-
 
 
 def overlay_masks(m1, m2, alpha=0.5):
@@ -100,6 +104,18 @@ def add_overlay(im, m1, m2, alpha=0.5):
     return I
 
 
+def iou_time(gt, pred):
+    # calculate iou
+    gt = set(np.arange(gt[0], gt[1] + 1))
+
+    if pred:
+        pred = set(np.arange(pred[0], pred[1] + 1))
+    else:
+        pred = set([])
+    iou = len(gt.intersection(pred)) / len(gt.union(pred))
+    return iou
+
+
 class TemplateMatch:
     def __init__(self, range=(0.7, 1.3), thres=0.5):
         self.scale_range = np.linspace(*range, 20)
@@ -124,8 +140,8 @@ class TemplateMatch:
         # loop over the scales of the image
         for scale in self.scale_range:
 
-            template_resized = imutils.resize(template,
-                                        width=int(template.shape[1]*scale))
+            template_resized = cv2.resize(
+                template, None, fx=scale, fy=scale)
             r = scale
 
             # if the resized image is smaller than the template, then break
@@ -133,8 +149,7 @@ class TemplateMatch:
             if iH < template_resized.shape[0] or iW < template_resized.shape[1]:
                 break
 
-            result = cv2.matchTemplate(image, template_resized,
-                            cv2.TM_CCOEFF_NORMED)
+            result = cv2.matchTemplate(image, template_resized, cv2.TM_CCOEFF_NORMED)
             (_, maxVal, _, maxLoc) = cv2.minMaxLoc(result)
 
             # if we have found a new maximum correlation value, then ipdate
@@ -147,11 +162,10 @@ class TemplateMatch:
         # unpack the bookkeeping varaible and compute the (x, y) coordinates
         # of the bounding box based on the resized ratio
         (_, maxLoc, r) = found
-        w, h = int(template.shape[1]*r), int(template.shape[0]*r)
+        w, h = int(template.shape[1] * r), int(template.shape[0] * r)
         x, y = maxLoc[:2]
 
-        cv2.rectangle(image, (x, y), (x+w-1, y+h-1),
-                                    (1., 0., 0.), 4)
+        cv2.rectangle(image, (x, y), (x + w - 1, y + h - 1), (1.0, 0.0, 0.0), 4)
 
         return (x, y, w, h), found[0], image
 

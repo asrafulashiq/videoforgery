@@ -13,13 +13,14 @@ import skimage
 import cv2
 import shutil
 
-from config import args
+import config
 from dataset import Dataset_image
 from utils import CustomTransform, add_overlay
 from models import Model
 
 
 if __name__ == "__main__":
+    args = config.arg_main()
     if args.ckpt is None:
         raise SystemExit
 
@@ -55,7 +56,7 @@ if __name__ == "__main__":
             with torch.no_grad():
                 im_tensor = im_tensor.unsqueeze(0)
                 output = model(im_tensor)
-                output = output.squeeze()
+                output = torch.sigmoid(output.squeeze())
 
             output = output.data.cpu().numpy()
             output = (output > args.thres).astype(np.float32)

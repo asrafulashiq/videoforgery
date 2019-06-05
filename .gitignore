@@ -17,6 +17,7 @@ test_figs/
 tmp/
 tmp2/
 tmp3/
+tmp*/
 
 
 *.mp4
