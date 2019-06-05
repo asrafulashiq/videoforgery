@@ -29,6 +29,11 @@ def add_sorp(im, type="pepper"):
 
     return im
 
+def get_boundary(im):
+    kernel = np.ones((5, 5), dtype=np.float32)
+    im_bnd = cv2.morphologyEx(img, cv2.MORPH_GRADIENT, kernel)
+    return im_bnd
+
 
 class Dataset_image:
     """class for dataset of image manipulation
@@ -196,10 +201,15 @@ class Dataset_image:
                     counter = 0
                 counter += 1
 
-    def load_data(self, batch=20, is_training=True, shuffle=True):
+    def load_data(self, batch=20, is_training=True, shuffle=True, with_boundary=False):
         counter = 0
         X = torch.zeros((batch, 3, self.args.size, self.args.size), dtype=torch.float32)
-        Y = torch.zeros((batch, 1, self.args.size, self.args.size), dtype=torch.float32)
+        if with_boundary:
+            ysize = 2
+        else:
+            ysize = 1
+        Y = torch.zeros((batch, ysize, self.args.size, self.args.size), dtype=torch.float32)
+
         Info = []
 
         if shuffle:
@@ -209,9 +219,11 @@ class Dataset_image:
             if (is_training and i in self.train_index) or (
                 not is_training and i in self.test_index
             ):
-                image, mask = self.__get_im(im_file, mask_file)
-                X[counter] = image
-                Y[counter] = mask
+                tmp = self.__get_im(im_file, mask_file)
+                X[counter] = tmp[0]
+                Y[counter, 0] = tmp[1]
+                if with_boundary:
+                    Y[counter, 1] = tmp[2]
                 Info.append((im_file, mask_file))
                 counter += 1
                 if counter % batch == 0:
@@ -229,7 +241,7 @@ class Dataset_image:
                         (batch, 3, self.args.size, self.args.size), dtype=torch.float32
                     )
                     Y = torch.zeros(
-                        (batch, 1, self.args.size, self.args.size), dtype=torch.float32
+                        (batch, ysize, self.args.size, self.args.size), dtype=torch.float32
                     )
                     Info = []
                     counter = 0
@@ -237,7 +249,7 @@ class Dataset_image:
     # def __len__(self):
     #     return len(self.__im_files_with_gt)
 
-    def __get_im(self, im_file, mask_file, do_transform=True):
+    def __get_im(self, im_file, mask_file, do_transform=True, with_boundary=False):
         image = io.imread(im_file)
         image = skimage.img_as_float32(image)  # image in [0-1] range
 
@@ -251,6 +263,9 @@ class Dataset_image:
         else:
             mask = _mask
 
+        if with_boundary:
+            boundary = get_boundary(mask)
+
         if do_transform and self.transform is not None:
             image, mask = self.transform(image, mask)
 
@@ -259,7 +274,12 @@ class Dataset_image:
 
                 pdb.set_trace()
 
-        return image, mask
+            if with_boundary:
+                _, boundary = self.transform(None, boundary)
+        if with_boundary:
+            return image, mask, boundary
+        else:
+            return image, mask
 
     def load_triplet(self, num=10):
         # randomly select one video and get frames (with labels)

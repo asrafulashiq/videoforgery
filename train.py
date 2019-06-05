@@ -88,3 +88,31 @@ def train(inputs, labels, model, optimizer, args, iteration, device, logger=None
     if logger is not None:
         logger.add_scalar("loss/total", loss, iteration)
 
+
+def train_with_boundary(inputs, labels, model, optimizer, args, iteration, device, logger=None):
+
+    model.train(True)
+    inputs = inputs.to(device)
+    labels = labels.to(device)
+
+    mask, boundary = labels[:, 0], labels[:, 1]
+    # prediction
+    y_m, y_b = model(inputs)
+
+    loss_mask = BCE_loss(y_m, mask)
+    loss_boundary = BCE_loss(y_b, boundary)
+
+    loss = loss_mask + args.gamma_b * loss_boundary
+
+    optimizer.zero_grad()
+    loss.backward()
+    nn.utils.clip_grad_norm_(model.parameters(), args.clip)
+    optimizer.step()
+
+    loss_val = loss.data.cpu().numpy()
+    print(f"Iteration: {iteration}  Loss : {loss_val:.4f}")
+
+    if logger is not None:
+        logger.add_scalar("loss/total", loss, iteration)
+        logger.add_scalar("loss/mask", loss_mask, iteration)
+        logger.add_scalar("loss/boundary", loss_boundary, iteration)

@@ -15,7 +15,7 @@ def arg_common():
     parser.add_argument("--test", action='store_true', help="test only mode")
 
     parser.add_argument("--size", type=int, default=224, help="image size")
-    parser.add_argument("--split", type=float, default=0.8, help="train split")
+    parser.add_argument("--split", type=float, default=0.7, help="train split")
 
     parser.add_argument("--seed", type=int, default=0, help="random seed")
     parser.add_argument("--lr", type=float, default=1e-4, help="learning rate")
@@ -37,6 +37,11 @@ def arg_main():
 
     parser.add_argument("--batch-size", "-b", type=int, default=20, help="batch size")
     parser.add_argument("--thres", type=float, default=0.5, help="threshold for detection")
+
+    parser.add_argument("--boundary", action='store_true',
+                        help="To include boundary for training")
+    parser.add_argument("--gamma_b", type=float, default=1,
+                        help="gamma for boundary loss")
 
     args = parser.parse_args()
     return args

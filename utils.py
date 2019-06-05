@@ -140,8 +140,7 @@ class TemplateMatch:
         # loop over the scales of the image
         for scale in self.scale_range:
 
-            template_resized = cv2.resize(
-                template, None, fx=scale, fy=scale)
+            template_resized = cv2.resize(template, None, fx=scale, fy=scale)
             r = scale
 
             # if the resized image is smaller than the template, then break

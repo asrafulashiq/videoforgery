@@ -1,7 +1,7 @@
 from torch import nn
 from torch.nn import functional as F
 import torch
-from unet_models import UNet11, AlbuNet
+from unet_models import UNet11, AlbuNet, UNet11_two_branch_out
 from torchvision import transforms
 from torchvision import models
 import numpy as np
@@ -21,11 +21,20 @@ class Model(nn.Module):
     def __init__(self, pretrained=True):
         super().__init__()
         self.unet = UNet11(pretrained=pretrained)
-        # self.net = AlbuNet(pretrained=True)
 
     def forward(self, x):
         x = self.unet(x)
         return x
+
+
+class Model_boundary(nn.Module):
+    def __init__(self, pretrained=True):
+        super().__init__()
+        self.unet = UNet11_two_branch_out(pretrained=pretrained)
+
+    def forward(self, x):
+        y1, y2 = self.unet(x)
+        return y1, y2
 
 
 def init_weights(module):
