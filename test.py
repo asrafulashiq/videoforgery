@@ -19,7 +19,9 @@ from utils import MultiPagePdf, add_overlay
 from utils import CustomTransform
 
 import warnings
+
 warnings.filterwarnings("ignore")
+
 
 @torch.no_grad()
 def test_track(dataset, model, args, iteration, device, num=None, logger=None):
@@ -32,7 +34,73 @@ def test_track(dataset, model, args, iteration, device, num=None, logger=None):
 
     counter = 0
 
-    for cnt, (X_all, Y_all) in tqdm(enumerate(dataset.load_videos_track(is_training=False))):
+    for cnt, (X_all, Y_all) in tqdm(
+        enumerate(dataset.load_videos_track(is_training=False))
+    ):
+        # counter = 0
+        prev = None
+        _len = X_all.shape[0]
+        for i in range(_len):
+            X = X_all[i, :3]
+            labels = Y_all[i]
+
+            X = X.to(device)
+            labels = labels.to(device)
+            if i == 0:
+                prev = torch.zeros(labels.shape, dtype=torch.float32).to(device)
+
+            inp = torch.cat((X, prev), 0)
+            preds = model(inp.unsqueeze(0))
+            preds = torch.sigmoid(preds)
+            prev = preds.squeeze(0)
+
+            _preds = preds.squeeze().data.cpu().numpy().flatten()
+            _labels = labels.squeeze().data.cpu().numpy().flatten()
+            _labels = (_labels > 0.5).astype(np.float32)
+            P.extend(_preds.tolist())
+            L.extend(_labels.tolist())
+
+            # counter += 1
+            # if counter % 120 == 0:
+            #     _auc, _f1 = score_report(P, L, args, iteration)
+            #     aucs.append(_auc)
+            #     f1s.append(_f1)
+            #     P = []
+            #     L = []
+        if num is not None and cnt >= num:
+            break
+
+    if len(P) > 5 * 4e5:
+        _auc, _f1 = score_report(P, L, args, iteration)
+        aucs.append(_auc)
+        f1s.append(_f1)
+
+    auc_mean = np.mean(aucs)
+    f1_mean = np.mean(f1s)
+
+    print("TEST")
+    print(f"AUC_ROC: {auc_mean: .4f}")
+    print(f"F1 Score: {f1_mean:.4f}")
+
+    if logger is not None:
+        logger.add_scalar("score/f1", f1_mean, iteration)
+        logger.add_scalar("score/auc_roc", auc_mean, iteration)
+
+
+@torch.no_grad()
+def test_move(dataset, model, args, iteration, device, num=None, logger=None):
+    model.eval()
+
+    aucs = []
+    f1s = []
+    P = []
+    L = []
+
+    counter = 0
+
+    for cnt, (X_all, Y_all) in tqdm(
+        enumerate(dataset.load_videos_track(is_training=False))
+    ):
         # counter = 0
         prev = None
         _len = X_all.shape[0]
@@ -130,14 +198,8 @@ def test_match_in_the_video(dataset, args, tk=3):
     for cnt, tmp in tqdm(enumerate(dataset.get_search_from_video())):
         X, x_ref, gt_ind, first_ind = tmp
 
-        # X = X.to(device)
-        # x_ref = x_ref.to(device)
-
         sim_list = []
         for i in range(X.shape[0]):
-            # _input = torch.stack([x_ref, X[i]], 0).to(device).unsqueeze(0)
-            # out = model(_input).squeeze()
-            # out = torch.sigmoid(out)
             out = matcher.match(X[i], x_ref)
             bbox, val, patched_im = out
             sim_list.append(val)
@@ -153,11 +215,7 @@ def test_match_in_the_video(dataset, args, tk=3):
         k = np.where(sort_ind == gt_ind)[0][0] + 1
         print(
             "{:03d} Target: {:2d}, Matched: {:2d}, topk: {:3d}, GT: {:2d}".format(
-                cnt,
-                first_ind,
-                sort_ind[0],
-                k,
-                gt_ind,
+                cnt, first_ind, sort_ind[0], k, gt_ind
             )
         )
 
@@ -168,9 +226,7 @@ def test_match_in_the_video(dataset, args, tk=3):
 
     for fl in range(1, 6):
         sc = [1 if i <= fl else 0 for i in _top]
-        print("Top-{} accuracy: {:.2f}".format(
-            fl, np.sum(sc) / len(sc)
-        ))
+        print("Top-{} accuracy: {:.2f}".format(fl, np.sum(sc) / len(sc)))
 
 
 @torch.no_grad()
@@ -187,11 +243,13 @@ def test(dataset, model, args, iteration, device, logger=None):
         X = X.to(device)
         labels = labels.to(device)
         preds = model(X)
+        if args.boundary:
+            preds = preds[0]
         preds = torch.sigmoid(preds)
 
         preds = preds.squeeze().data.cpu().numpy()
         labels = labels.squeeze().data.cpu().numpy()
-        labels = (labels > 0.5).astype(np.float32)
+        labels = (labels > args.thres).astype(np.float32)
 
         P.extend(preds.flatten().tolist())
         L.extend(labels.flatten().tolist())
@@ -208,9 +266,6 @@ def test(dataset, model, args, iteration, device, logger=None):
         #     P = []
         #     L = []
 
-        # plot_samples(preds.data.cpu().numpy(), labels.data.cpu().numpy(), args, info)
-        # break
-    # score_report(Y_pred, Y_gt, args, iteration, logger)
     if len(P) > 4e5:
         _auc, _f1 = score_report(P, L, args, iteration)
         aucs.append(_auc)

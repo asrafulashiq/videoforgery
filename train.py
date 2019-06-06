@@ -32,12 +32,11 @@ def Index_loss(ysim, ydis, ind_gt, device):
 
     y_gt = torch.abs(ind_gt[:, 0] - ind_gt[:, 1])
     # _loss = torch.mean(torch.max(y_gt - y, torch.FloatTensor([0]).to(device)))
-    _loss = torch.mean(
-        torch.max(0.2 + ysim - ydis, torch.FloatTensor([0]).to(device))
-    )
+    _loss = torch.mean(torch.max(0.2 + ysim - ydis, torch.FloatTensor([0]).to(device)))
 
     if torch.isnan(_loss):
         import pdb
+
         pdb.set_trace()
 
     return _loss
@@ -45,7 +44,7 @@ def Index_loss(ysim, ydis, ind_gt, device):
 
 def train_match_in_the_video(
     dataset, model, optimizer, args, iteration, device, logger=None
-    ):
+):
     model.train()
     X_im, Ind = dataset.load_triplet(num=args.batch_size)
     X_im = X_im.to(device)
@@ -89,7 +88,9 @@ def train(inputs, labels, model, optimizer, args, iteration, device, logger=None
         logger.add_scalar("loss/total", loss, iteration)
 
 
-def train_with_boundary(inputs, labels, model, optimizer, args, iteration, device, logger=None):
+def train_with_boundary(
+    inputs, labels, model, optimizer, args, iteration, device, logger=None
+):
 
     model.train(True)
     inputs = inputs.to(device)
@@ -110,7 +111,12 @@ def train_with_boundary(inputs, labels, model, optimizer, args, iteration, devic
     optimizer.step()
 
     loss_val = loss.data.cpu().numpy()
-    print(f"Iteration: {iteration}  Loss : {loss_val:.4f}")
+
+    print(
+        f"Iteration: {iteration:6d}, loss_m : {loss_mask.data.cpu().numpy():.4f} "
+        + f"loss_b : {loss_boundary.data.cpu().numpy():.4f} "
+        + f"Loss : {loss_val:.4f}"
+    )
 
     if logger is not None:
         logger.add_scalar("loss/total", loss, iteration)

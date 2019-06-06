@@ -31,7 +31,7 @@ def add_sorp(im, type="pepper"):
 
 def get_boundary(im):
     kernel = np.ones((5, 5), dtype=np.float32)
-    im_bnd = cv2.morphologyEx(img, cv2.MORPH_GRADIENT, kernel)
+    im_bnd = cv2.morphologyEx(im, cv2.MORPH_GRADIENT, kernel)
     return im_bnd
 
 
@@ -150,21 +150,30 @@ class Dataset_image:
             yield X, Y_red, forge_time, Y_green, gt_time, name
 
 
-    def load_videos_track(self, is_training=True):
+    def load_videos_track(self, is_training=True, add_prev=True, is_shuffle=True):
 
-        for cnt, inf in enumerate(self.data):
+        idx = []
+        if is_training:
+            idx = self.train_index
+        else:
+            idx = self.test_index
 
-            if is_training and cnt not in self.train_index:
-                continue
-            if not is_training and cnt not in self.test_index:
-                continue
+        if is_shuffle:
+            np.random.shuffle(idx)
 
+        for cnt, _ind in enumerate(idx):
+            inf = self.data[_ind]
             if is_training:
                 maxlen = self.args.batch_size
             else:
                 maxlen = len(inf["files"])
 
-            Im = torch.zeros(maxlen, 4, self.args.size, self.args.size)
+            if add_prev:
+                dim = 4
+            else:
+                dim=3
+
+            Im = torch.zeros(maxlen, dim, self.args.size, self.args.size)
             GT = torch.zeros(maxlen, 1, self.args.size, self.args.size)
 
             prev_mask = None
@@ -183,20 +192,24 @@ class Dataset_image:
                 if self.transform:
                     image_t, mask_t = self.transform(image, mask)
 
-                if i == 0:
+                if add_prev and i == 0:
                     prev_mask = torch.zeros(
                         (1, self.args.size, self.args.size), dtype=torch.float32
                     )
 
-                Im[counter - 1] = torch.cat((image_t, prev_mask), 0)
+                if add_prev:
+                    Im[counter - 1] = torch.cat((image_t, prev_mask), 0)
+                else:
+                    Im[counter - 1] = image_t
                 GT[counter - 1] = mask_t
 
-                prev_mask = self.randomize_mask(mask)
-                _, prev_mask = self.transform(None, prev_mask)
+                if add_prev:
+                    prev_mask = self.randomize_mask(mask)
+                    _, prev_mask = self.transform(None, prev_mask)
 
                 if counter % maxlen == 0:
                     yield Im, GT
-                    Im = torch.zeros(maxlen, 4, self.args.size, self.args.size)
+                    Im = torch.zeros(maxlen, dim, self.args.size, self.args.size)
                     GT = torch.zeros(maxlen, 1, self.args.size, self.args.size)
                     counter = 0
                 counter += 1
@@ -219,7 +232,7 @@ class Dataset_image:
             if (is_training and i in self.train_index) or (
                 not is_training and i in self.test_index
             ):
-                tmp = self.__get_im(im_file, mask_file)
+                tmp = self.__get_im(im_file, mask_file, with_boundary=with_boundary)
                 X[counter] = tmp[0]
                 Y[counter, 0] = tmp[1]
                 if with_boundary:

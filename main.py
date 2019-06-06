@@ -5,13 +5,14 @@ from torch import nn
 from torchvision import transforms
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
+
 # custom module
 
-from models import Model
+from models import Model, Model_boundary
 import config
 from dataset import Dataset_image
 from utils import CustomTransform
-from train import train
+from train import train, train_with_boundary
 from test import test
 
 
@@ -31,19 +32,26 @@ if __name__ == "__main__":
     torch.cuda.manual_seed_all(args.seed)
 
     # logger
-    logger = SummaryWriter("./logs/" + args.model+"_"+args.videoset)
+    logger = SummaryWriter("./logs/" + args.model + "_" + args.videoset)
 
     # dataset
     tsfm = CustomTransform(size=args.size)
     dataset = Dataset_image(args=args, transform=tsfm)
 
     # model
-    model = Model().to(device)
+    if args.boundary:
+        model = Model_boundary()
+        fn_train = train_with_boundary
+    else:
+        fn_train = train
+        model = Model()
+
+    model = model.to(device)
 
     # optimizer
     optimizer = torch.optim.Adam(
-        filter(lambda p: p.requires_grad, model.parameters()),
-        lr=args.lr)
+        filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr
+    )
     iteration = 0
     init_ep = 0
     # load if pretrained model
@@ -59,19 +67,25 @@ if __name__ == "__main__":
     else:  # train
         for ep in tqdm(range(init_ep, args.epoch)):
             # train
-            for x_batch, y_batch, _ in dataset.load_data(args.batch_size, is_training=True):
-                train(x_batch, y_batch, model, optimizer, args,
-                    iteration, device, logger)
+            for x_batch, y_batch, _ in dataset.load_data(
+                args.batch_size, is_training=True, with_boundary=args.boundary
+            ):
+                fn_train(
+                    x_batch, y_batch, model, optimizer, args, iteration, device, logger
+                )
                 iteration += 1
                 # if iteration % 10 == 0:
                 #     test(dataset, model, args, iteration, device, logger)
 
             # save current state
-            torch.save({
-                "epoch": ep,
-                "model_state": model.state_dict(),
-                "opt_state": optimizer.state_dict()
-            }, "./ckpt/"+args.model+"_"+args.videoset+".pkl")
+            torch.save(
+                {
+                    "epoch": ep,
+                    "model_state": model.state_dict(),
+                    "opt_state": optimizer.state_dict(),
+                },
+                "./ckpt/" + args.model + "_" + args.videoset + ".pkl",
+            )
 
             # test
             test(dataset, model, args, iteration, device, logger)
