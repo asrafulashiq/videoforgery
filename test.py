@@ -223,7 +223,7 @@ def test(dataset, model, args, iteration, device, logger=None, max_iter=None):
 
         preds = preds.squeeze().data.cpu().numpy()
         labels = labels.squeeze().data.cpu().numpy()
-        labels = (labels > args.thres).astype(np.float32)
+        labels = (labels > 0.5).astype(np.float32)
 
         tn, fp, fn, tp = metrics.confusion_matrix(
             labels.ravel(), (preds > args.thres).ravel()

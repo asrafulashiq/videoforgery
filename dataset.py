@@ -255,7 +255,6 @@ class Dataset_image:
 
                     if torch.any(Y < 0):
                         import pdb
-
                         pdb.set_trace()
                     X = torch.zeros(
                         (batch, 3, self.args.size, self.args.size), dtype=torch.float32
