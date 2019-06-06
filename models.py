@@ -17,6 +17,12 @@ class Model_track(nn.Module):
         return x
 
 
+class Modeel_deeplab(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+
+
 class Model(nn.Module):
     def __init__(self, pretrained=True):
         super().__init__()
