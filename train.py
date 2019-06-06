@@ -5,6 +5,27 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 
+def focal_loss(x, t, gamma=2):
+    '''Focal loss.
+    Args:
+        x: (tensor) sized [N,1, ...].
+        y: (tensor) sized [N, 1, ...].
+    Return:
+        (tensor) focal loss.
+    '''
+
+    x = x.view(-1)
+    t = t.view(-1)
+
+    wgt = torch.sum(t) / (t.shape[0])
+
+    p = torch.sigmoid(x)
+    pt = p*t + (1-p)*(1-t)         # pt = p if t > 0 else 1-p
+    w = (1-wgt)*t + wgt*(1-t)  # w = alpha if t > 0 else 1-alpha
+    w = w * (1-pt).pow(gamma)
+    return F.binary_cross_entropy_with_logits(x, t, w.detach())
+
+
 def BCE_loss(y, labels):
     eps = 1e-8
     y = y.squeeze().double()
@@ -73,6 +94,7 @@ def train(inputs, labels, model, optimizer, args, iteration, device, logger=None
     # prediction
     y = model(inputs)
 
+    # loss = focal_loss(y, labels)
     loss = BCE_loss(y, labels)
 
     optimizer.zero_grad()

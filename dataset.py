@@ -75,10 +75,14 @@ class Dataset_image:
                     mask_file = os.path.join(
                         str(self.mask_root), name.name, (_file.stem + ".png")
                     )
+                    if not os.path.exists(mask_file):
+                        mask_file = os.path.join(
+                            str(self.mask_root), name.name, (_file.stem + ".jpg")
+                        )
                     try:
                         assert os.path.exists(mask_file)
                     except AssertionError:
-                        continue
+                        raise FileNotFoundError(f"{mask_file} not found")
                     info["files"].append((im_file, mask_file))
                     self.__im_files_with_gt.append((i, im_file, mask_file))
             self.data.append(info)

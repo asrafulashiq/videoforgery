@@ -5,28 +5,26 @@ from unet_models import UNet11, AlbuNet, UNet11_two_branch_out
 from torchvision import transforms
 from torchvision import models
 import numpy as np
+from modeling import deeplab
 
 
-class Model_track(nn.Module):
-    def __init__(self, pretrained=True):
-        super().__init__()
-        self.unet = UNet11(pretrained=pretrained, mod=True, mod_chan=4)
 
-    def forward(self, x):
-        x = self.unet(x)
-        return x
-
-
-class Modeel_deeplab(nn.Module):
-    def __init__(self):
-        super().__init__()
-
+def get_model(type, pretrained=True):
+    if type == "unet":
+        model = UNet11(pretrained=pretrained)
+    elif type == "albunet":
+        model = AlbuNet(pretrained=pretrained)
+    elif type == "deeplab":
+        model = deeplab.DeepLab(num_classes=1)
+    else:
+        raise Exception("Wrong model")
+    return model
 
 
 class Model(nn.Module):
-    def __init__(self, pretrained=True):
+    def __init__(self, pretrained=True, type="unet"):
         super().__init__()
-        self.unet = UNet11(pretrained=pretrained)
+        self.unet = get_model(type, pretrained)
 
     def forward(self, x):
         x = self.unet(x)

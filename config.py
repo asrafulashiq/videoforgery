@@ -21,11 +21,13 @@ def arg_common():
     parser.add_argument("--lr", type=float, default=1e-4, help="learning rate")
     parser.add_argument("--clip", type=float, default=5,
                         help="gradient clipping")
+    parser.add_argument("--model-type", default="unet", type=str,
+                        help="model type (unet/albunet/deeplab)")
     return parser
 
 def arg_main():
     parser = arg_common()
-    parser.add_argument("--model", type=str, default="base2", help="model name")
+    parser.add_argument("--model", type=str, default="base", help="model name")
     parser.add_argument("--ckpt", type=str, default=None, help="pretrained model path")
     parser.add_argument(
         "--test-path",

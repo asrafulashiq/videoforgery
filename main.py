@@ -44,7 +44,7 @@ if __name__ == "__main__":
         fn_train = train_with_boundary
     else:
         fn_train = train
-        model = Model()
+        model = Model(type=args.model_type)
 
     model = model.to(device)
 
@@ -74,8 +74,8 @@ if __name__ == "__main__":
                     x_batch, y_batch, model, optimizer, args, iteration, device, logger
                 )
                 iteration += 1
-                # if iteration % 10 == 0:
-                #     test(dataset, model, args, iteration, device, logger)
+                # if iteration % 10 == 1:
+                #     test(dataset, model, args, iteration, device, logger, max_iter=800)
 
             # save current state
             torch.save(
@@ -84,10 +84,16 @@ if __name__ == "__main__":
                     "model_state": model.state_dict(),
                     "opt_state": optimizer.state_dict(),
                 },
-                "./ckpt/" + args.model + "_" + args.videoset + ".pkl",
+                "./ckpt/"
+                + args.model
+                + "_"
+                + args.model_type
+                + "_"
+                + args.videoset
+                + ".pkl",
             )
 
             # test
-            test(dataset, model, args, iteration, device, logger)
+            test(dataset, model, args, iteration, device, logger, max_iter=800)
 
         logger.close()

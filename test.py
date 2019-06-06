@@ -230,7 +230,7 @@ def test_match_in_the_video(dataset, args, tk=3):
 
 
 @torch.no_grad()
-def test(dataset, model, args, iteration, device, logger=None):
+def test(dataset, model, args, iteration, device, logger=None, max_iter=None):
     model.eval()
 
     aucs = []
@@ -265,6 +265,9 @@ def test(dataset, model, args, iteration, device, logger=None):
         #     f1s.append(_f1)
         #     P = []
         #     L = []
+        counter += X.shape[0]
+        if max_iter is not None and counter > max_iter:
+            break
 
     if len(P) > 4e5:
         _auc, _f1 = score_report(P, L, args, iteration)
