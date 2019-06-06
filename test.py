@@ -27,13 +27,8 @@ warnings.filterwarnings("ignore")
 def test_track(dataset, model, args, iteration, device, num=None, logger=None):
     model.eval()
 
-    aucs = []
-    f1s = []
-    P = []
-    L = []
-
     counter = 0
-
+    Tp, Tn, Fp, Fn = 0, 0, 0, 0
     for cnt, (X_all, Y_all) in tqdm(
         enumerate(dataset.load_videos_track(is_training=False))
     ):
@@ -60,31 +55,20 @@ def test_track(dataset, model, args, iteration, device, num=None, logger=None):
             P.extend(_preds.tolist())
             L.extend(_labels.tolist())
 
-            # counter += 1
-            # if counter % 120 == 0:
-            #     _auc, _f1 = score_report(P, L, args, iteration)
-            #     aucs.append(_auc)
-            #     f1s.append(_f1)
-            #     P = []
-            #     L = []
+            tn, fp, fn, tp = metrics.confusion_matrix(
+                _labels, (_preds > args.thres)
+            ).ravel()
+            Tp, Tn, Fp, Fn = Tp + tp, Tn + tn, Fp + fp, Fn + fn
+
         if num is not None and cnt >= num:
             break
 
-    if len(P) > 5 * 4e5:
-        _auc, _f1 = score_report(P, L, args, iteration)
-        aucs.append(_auc)
-        f1s.append(_f1)
-
-    auc_mean = np.mean(aucs)
-    f1_mean = np.mean(f1s)
-
+    f1_mean = 2 * Tp / (2 * Tp + Fp + Fn)
     print("TEST")
-    print(f"AUC_ROC: {auc_mean: .4f}")
     print(f"F1 Score: {f1_mean:.4f}")
 
     if logger is not None:
         logger.add_scalar("score/f1", f1_mean, iteration)
-        logger.add_scalar("score/auc_roc", auc_mean, iteration)
 
 
 @torch.no_grad()
@@ -124,13 +108,6 @@ def test_move(dataset, model, args, iteration, device, num=None, logger=None):
             P.extend(_preds.tolist())
             L.extend(_labels.tolist())
 
-            # counter += 1
-            # if counter % 120 == 0:
-            #     _auc, _f1 = score_report(P, L, args, iteration)
-            #     aucs.append(_auc)
-            #     f1s.append(_f1)
-            #     P = []
-            #     L = []
         if num is not None and cnt >= num:
             break
 
@@ -232,13 +209,10 @@ def test_match_in_the_video(dataset, args, tk=3):
 @torch.no_grad()
 def test(dataset, model, args, iteration, device, logger=None, max_iter=None):
     model.eval()
-
-    aucs = []
-    f1s = []
-
     counter = 0
-    P = []
-    L = []
+
+    Tp, Tn, Fp, Fn = 0, 0, 0, 0
+
     for X, labels, info in tqdm(dataset.load_data(batch=40, is_training=False)):
         X = X.to(device)
         labels = labels.to(device)
@@ -251,40 +225,20 @@ def test(dataset, model, args, iteration, device, logger=None, max_iter=None):
         labels = labels.squeeze().data.cpu().numpy()
         labels = (labels > args.thres).astype(np.float32)
 
-        P.extend(preds.flatten().tolist())
-        L.extend(labels.flatten().tolist())
+        tn, fp, fn, tp = metrics.confusion_matrix(
+            labels.ravel(), (preds > args.thres).ravel()
+        ).ravel()
+        Tp, Tn, Fp, Fn = Tp + tp, Tn + tn, Fp + fp, Fn + fn
 
-        # _auc, _f1 = score_report(preds.flatten(), labels.flatten(), args, iteration)
-        # aucs.append(_auc)
-        # f1s.append(_f1)
-
-        # counter += 1
-        # if counter % 50 == 0:
-        #     _auc, _f1 = score_report(P, L, args, iteration)
-        #     aucs.append(_auc)
-        #     f1s.append(_f1)
-        #     P = []
-        #     L = []
         counter += X.shape[0]
-        if max_iter is not None and counter > max_iter:
-            break
 
-    if len(P) > 4e5:
-        _auc, _f1 = score_report(P, L, args, iteration)
-        aucs.append(_auc)
-        f1s.append(_f1)
-
-    auc_mean = np.mean(aucs)
-    f1_mean = np.mean(f1s)
-
+    f1_mean = 2. * Tp / (2 * Tp + Fp + Fn)
     print()
     print("TEST")
-    print(f"AUC_ROC: {auc_mean: .4f}")
     print(f"F1 Score: {f1_mean:.4f}")
 
     if logger is not None:
         logger.add_scalar("score/f1", f1_mean, iteration)
-        logger.add_scalar("score/auc_roc", auc_mean, iteration)
 
 
 def score_report(y_pred, y_gt, args, iteration, logger=None):

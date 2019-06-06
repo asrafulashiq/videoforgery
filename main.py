@@ -59,7 +59,7 @@ if __name__ == "__main__":
         checkpoint = torch.load(args.ckpt)
         model.load_state_dict(checkpoint["model_state"])
         optimizer.load_state_dict(checkpoint["opt_state"])
-        init_ep = checkpoint["epoch"]
+        # init_ep = checkpoint["epoch"]
 
     # train
     if args.test:  # test mode

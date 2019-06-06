@@ -39,10 +39,13 @@ class Dataset_image:
     """class for dataset of image manipulation
     """
 
-    def __init__(self, args=None, transform=None):
+    def __init__(self, args=None, transform=None, videoset=None):
         # args contain necessary argument
         self.args = args
-        self.videoset = args.videoset
+        if videoset is None:
+            self.videoset = args.videoset
+        else:
+            self.videoset = videoset
         self.data_root = Path(args.root) / (self.videoset + "_tempered")
         self.data_root = self.data_root.expanduser()
         assert self.data_root.exists()
