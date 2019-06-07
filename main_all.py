@@ -134,8 +134,8 @@ if __name__ == "__main__":
 
         iou_move = utils.iou_time(forge_time, pred_forge_time)
 
-        print(f"{cnt:2d} {vid_name}: IoU -  move : {iou_move:.2f}  copy : {iou_copy:.2f}"
-        + f" F1 : {f_score:.2f}" + f" F1-copy : {f_copy:.2f}")
+        print(f"{cnt:2d} {vid_name:>20s}: IoU -  move: {iou_move:.2f}  copy: {iou_copy:.2f}"
+        + f"  F1: {f_score:.2f}" + f"  F1-copy: {f_copy:.2f}")
 
         for i in range(X.shape[0]):
             im = X[i]
