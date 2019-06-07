@@ -15,6 +15,9 @@ from utils import CustomTransform
 from train import train, train_with_boundary
 from test import test
 
+import warnings
+warnings.filterwarnings("ignore")
+
 
 if __name__ == "__main__":
 

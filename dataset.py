@@ -120,8 +120,8 @@ class Dataset_image:
 
             _len = len(filenames)
             X = np.zeros((_len, self.args.size, self.args.size, 3), dtype=np.float32)
-            Y_red = np.zeros((_len, self.args.size, self.args.size), dtype=np.float32)
-            Y_green = np.zeros((_len, self.args.size, self.args.size), dtype=np.float32)
+            Y_forge = np.zeros((_len, self.args.size, self.args.size), dtype=np.float32)
+            Y_orig = np.zeros((_len, self.args.size, self.args.size), dtype=np.float32)
 
             flag = False
             forge_time = None
@@ -148,13 +148,13 @@ class Dataset_image:
                 if mask_new is None:
                     mask_new = np.zeros((self.args.size, self.args.size), dtype=np.float32)
                     mask_orig = np.zeros((self.args.size, self.args.size), dtype=np.float32)
-                Y_red[i] = cv2.resize(mask_orig, (self.args.size, self.args.size))
-                Y_green[i-offset] = cv2.resize(mask_new, (self.args.size, self.args.size))
+                Y_forge[i] = (cv2.resize(mask_new, (self.args.size, self.args.size)) > 0.5)
+                Y_orig[i-offset] = (cv2.resize(mask_orig, (self.args.size, self.args.size)) > 0.5)
 
             if forge_time is not None and forge_time[1] == -1:
                 forge_time[1] = i
                 gt_time[1] = i - offset
-            yield X, Y_red, forge_time, Y_green, gt_time, name
+            yield X, Y_forge, forge_time, Y_orig, gt_time, name
 
 
     def load_videos_track(self, is_training=True, add_prev=True, is_shuffle=True):

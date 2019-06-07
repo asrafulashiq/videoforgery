@@ -232,6 +232,9 @@ def test(dataset, model, args, iteration, device, logger=None, max_iter=None):
 
         counter += X.shape[0]
 
+        if max_iter is not None and counter > max_iter:
+            break
+
     f1_mean = 2. * Tp / (2 * Tp + Fp + Fn)
     print()
     print("TEST")

@@ -6,34 +6,44 @@ import os
 from tqdm import tqdm
 import numpy as np
 
-# metric
 from sklearn import metrics
-
+import cv2
 import utils
 from utils import MultiPagePdf, add_overlay
 from utils import CustomTransform
 
-import warnings
-warnings.filterwarnings("ignore")
+
+def get_patch(im):
+    # im: image with patch
+    x, y = np.nonzero(im)
+    x1, x2, y1, y2 = np.min(x), np.max(x), np.min(y), np.max(y)
+    patch = im[x1:x2, y1:y2]
+    return patch
 
 
-def template_vid(X, X_ref, matcher):
+def template_vid(X, X_ref, matcher, Y_orig=None):
 
     if X_ref.size == 0:
         return []
 
     sim_list = np.zeros((X_ref.shape[0], X.shape[0]), dtype=np.float)
+    bb_list = np.zeros((X_ref.shape[0], X.shape[0], 4), dtype=np.int)
     for i in range(X_ref.shape[0]):
         for j in range(X.shape[0]):
             out = matcher.match(X[j], X_ref[i])
             bbox, val, patched_im = out
             sim_list[i, j] = val
+            bb_list[i, j] = bbox
+            # _tinfo = metrics.confusion_matrix(
+            #     Y_orig[i].ravel(), patched_im.ravel()
+            # ).ravel()
+            # T_score += np.array(_tinfo)
 
     gt_len = X_ref.shape[0]
 
     arr0 = np.arange(gt_len)
     flag = [-1, -1]
-    for k in range(0, X.shape[0]-gt_len):
+    for k in range(0, X.shape[0]-gt_len+1):
         arr = arr0 + k
         val = sim_list[arr0, arr]
         prod = np.prod(val)
@@ -41,7 +51,32 @@ def template_vid(X, X_ref, matcher):
         if prod > flag[0]:
             flag = (prod, k)
 
-    return (flag[1], flag[1]+gt_len)
+    bb = bb_list[arr0, arr0+flag[1]]
+
+    #
+
+    T_score = np.zeros(4)
+
+    X_src_mask = np.zeros((gt_len,X.shape[1], X.shape[2]))
+    for i in range(X_ref.shape[0]):
+        ref = X_ref[i]
+        patch = get_patch(skimage.color.rgb2gray(ref))
+        x, y, w, h = bb[i]
+        patch_res = cv2.resize(patch, (w, h), interpolation=cv2.INTER_NEAREST)
+        nim = np.zeros(X_ref.shape[1:])
+        nim[y:y+h, x:x+w] = patch_res
+        X_src_mask[i] = nim
+
+        # compare
+        _tinfo = metrics.confusion_matrix(
+            Y_orig[i].ravel(), nim.ravel()
+        ).ravel()
+        T_score += np.array(_tinfo)
+
+    X_src = np.zeros(X.shape[:3])
+    X_src[flag[1]: flag[1]+gt_len] = X_src_mask
+
+    return (flag[1], flag[1]+gt_len), T_score, X_src
 
 
 

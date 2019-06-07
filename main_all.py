@@ -9,6 +9,8 @@ from skimage import io
 import cv2
 from pathlib import Path
 import skimage
+from sklearn import metrics
+
 # custom module
 from models import Model
 import config
@@ -44,13 +46,19 @@ if __name__ == "__main__":
         checkpoint = torch.load(args.ckpt)
         model.load_state_dict(checkpoint["model_state"])
 
+    T_score_cum = np.zeros(4)
+    T_score_cum_copy = np.zeros(4)
+
     for cnt, dat in (enumerate(dataset.load_videos_all())):
         # work with a particular video
-        X, Y_red, forge_time, Y_green, gt_time, vid_name = dat
+        X, Y_forge, forge_time, Y_orig, gt_time, vid_name = dat
 
-        Pred = np.zeros(X.shape[:3], dtype=np.float32)
+        Pred = np.zeros(X.shape[:2], dtype=np.float32)
+        Pred_im = np.zeros(X.shape[:3], dtype=np.float32)
 
         act_ind = []
+
+        T_score = np.zeros(4) # tn, fp, fn, tp
 
         for i in (range(X.shape[0])):
             x_im = X[i]
@@ -67,7 +75,6 @@ if __name__ == "__main__":
 
             # get the largest connected component
             pred_lab = skimage.measure.label(pred, background=0)
-
             labels = np.unique(pred_lab)
             if labels.size > 1:
                 area = [(i, np.sum(pred_lab==i)) for i in labels if i != 0]
@@ -82,6 +89,13 @@ if __name__ == "__main__":
                     act_ind.append(i)
 
             Pred[i] = pred_lab
+            Pred_im[i] = utils.image_with_mask(X[i], pred_lab)
+
+            _tinfo = metrics.confusion_matrix(
+                Y_forge[i].ravel(), pred_lab.ravel()
+            ).ravel()
+            T_score += np.array(_tinfo)
+
 
             #! TEST
             # pp = utils.image_with_mask(X[i], pred_lab, type="foreground", blend=True)
@@ -90,16 +104,22 @@ if __name__ == "__main__":
             # io.imsave(str(path/f"{i}.jpg"), skimage.img_as_ubyte(pp))
 
 
+        T_score_cum += T_score
+
+        f_score = utils.fscore(T_score)
+
         # match
         matcher = utils.TemplateMatch(thres=args.thres)
 
-        if forge_time is None:
+        if forge_time is None or len(act_ind)==0:
             continue
 
+        X_ref = Pred_im[act_ind]
 
-        X_ref = Pred[act_ind]
+        pred_t, tscore, Y_orig_pred = vid_match.template_vid(X, X_ref, matcher, Y_orig)
 
-        pred_t = vid_match.template_vid(X, X_ref, matcher)
+        T_score_cum_copy += tscore
+        f_copy = utils.fscore(tscore)
 
         iou_copy = utils.iou_time(gt_time, pred_t)
 
@@ -113,4 +133,24 @@ if __name__ == "__main__":
 
         iou_move = utils.iou_time(forge_time, pred_forge_time)
 
-        print(f"{cnt}: IoU -  move {iou_move:.2f}  copy : {iou_copy:.2f}")
+        print(f"{cnt:6d}: IoU -  move : {iou_move:.2f}  copy : {iou_copy:.2f}"
+        + f" F1 : {f_score:.2f}" + f" F1-copy : {f_copy:.2f}")
+
+        for i in range(X.shape[0]):
+            im = X[i]
+            mask_forge = Pred[i]
+            mask_orig = Y_orig_pred[i]
+
+            image = utils.add_overlay(im, mask_orig, mask_forge)
+
+            # pp = utils.image_with_mask(X[i], pred_lab, type="foreground", blend=True)
+            path = Path(f"tmp_all/{cnt}")
+            path.mkdir(parents=True, exist_ok=True)
+            io.imsave(str(path/f"{i}.jpg"), skimage.img_as_ubyte(image))
+
+
+    f_score_cum = utils.fscore(T_score_cum)
+
+    print("--------------")
+    print(f" F1 (cumulative) : {f_score_cum:.2f}")
+    print(f" F1-copy (cumulative) : {utils.fscore(T_score_cum_copy):.2f}")

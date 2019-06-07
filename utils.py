@@ -13,6 +13,11 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 
+def fscore(T_score):
+    Fp, Fn, Tp = T_score[1:]
+    f_score = 2 * Tp / (2 * Tp + Fp + Fn)
+    return f_score
+
 class CustomTransform:
     def __init__(self, size=224):
         self.size = (size, size)
@@ -117,8 +122,8 @@ def iou_time(gt, pred):
 
 
 class TemplateMatch:
-    def __init__(self, range=(0.7, 1.3), thres=0.5):
-        self.scale_range = np.linspace(*range, 20)
+    def __init__(self, range=(0.8, 4), thres=0.5):
+        self.scale_range = np.linspace(*range, 30)
         self.thres = thres
 
     def get_patch(self, im):
@@ -140,6 +145,9 @@ class TemplateMatch:
         # loop over the scales of the image
         for scale in self.scale_range:
 
+            if (template.shape[0]*scale) < 5 or (template.shape[1]*scale) < 5:
+                continue
+
             template_resized = cv2.resize(template, None, fx=scale, fy=scale)
             r = scale
 
@@ -148,7 +156,8 @@ class TemplateMatch:
             if iH < template_resized.shape[0] or iW < template_resized.shape[1]:
                 break
 
-            result = cv2.matchTemplate(image, template_resized, cv2.TM_CCOEFF_NORMED)
+            result = cv2.matchTemplate(image, template_resized,
+                                        cv2.TM_CCOEFF_NORMED)
             (_, maxVal, _, maxLoc) = cv2.minMaxLoc(result)
 
             # if we have found a new maximum correlation value, then ipdate
@@ -164,9 +173,13 @@ class TemplateMatch:
         w, h = int(template.shape[1] * r), int(template.shape[0] * r)
         x, y = maxLoc[:2]
 
-        cv2.rectangle(image, (x, y), (x + w - 1, y + h - 1), (1.0, 0.0, 0.0), 4)
+        # cv2.rectangle(image, (x, y), (x + w - 1, y + h - 1), (1.0, 0.0, 0.0), 4)
 
-        return (x, y, w, h), found[0], image
+        t_res = cv2.resize(template, None, fx=r, fy=r)
+        nim = np.zeros(image.shape[:2])
+        nim[y: y + t_res.shape[0], x : x+t_res.shape[1]] = (t_res > 0.5)
+
+        return (x, y, w, h), found[0], nim
 
 
 class MultiPagePdf:
