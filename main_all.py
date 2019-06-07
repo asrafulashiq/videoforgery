@@ -53,8 +53,8 @@ if __name__ == "__main__":
         # work with a particular video
         X, Y_forge, forge_time, Y_orig, gt_time, vid_name = dat
 
-        Pred = np.zeros(X.shape[:2], dtype=np.float32)
-        Pred_im = np.zeros(X.shape[:3], dtype=np.float32)
+        Pred = np.zeros(X.shape[:3], dtype=np.float32)
+        Pred_im = np.zeros(X.shape[:4], dtype=np.float32)
 
         act_ind = []
 
@@ -77,7 +77,7 @@ if __name__ == "__main__":
             pred_lab = skimage.measure.label(pred, background=0)
             labels = np.unique(pred_lab)
             if labels.size > 1:
-                area = [(i, np.sum(pred_lab==i)) for i in labels if i != 0]
+                area = [(_i, np.sum(pred_lab==_i)) for _i in labels if _i != 0]
                 max_lab, _ = max(area, key = lambda x: x[1])
                 pred_lab[pred_lab != max_lab] = 0
                 pred_lab[pred_lab == max_lab] = 1
@@ -116,7 +116,8 @@ if __name__ == "__main__":
 
         X_ref = Pred_im[act_ind]
 
-        pred_t, tscore, Y_orig_pred = vid_match.template_vid(X, X_ref, matcher, Y_orig)
+        pred_t, tscore, Y_orig_pred = vid_match.template_vid(X, X_ref, matcher,
+                                                            Y_orig, act_ind)
 
         T_score_cum_copy += tscore
         f_copy = utils.fscore(tscore)
@@ -133,7 +134,7 @@ if __name__ == "__main__":
 
         iou_move = utils.iou_time(forge_time, pred_forge_time)
 
-        print(f"{cnt:6d}: IoU -  move : {iou_move:.2f}  copy : {iou_copy:.2f}"
+        print(f"{cnt:2d} {vid_name}: IoU -  move : {iou_move:.2f}  copy : {iou_copy:.2f}"
         + f" F1 : {f_score:.2f}" + f" F1-copy : {f_copy:.2f}")
 
         for i in range(X.shape[0]):
@@ -144,7 +145,7 @@ if __name__ == "__main__":
             image = utils.add_overlay(im, mask_orig, mask_forge)
 
             # pp = utils.image_with_mask(X[i], pred_lab, type="foreground", blend=True)
-            path = Path(f"tmp_all/{cnt}")
+            path = Path(f"tmp_all/{vid_name}")
             path.mkdir(parents=True, exist_ok=True)
             io.imsave(str(path/f"{i}.jpg"), skimage.img_as_ubyte(image))
 

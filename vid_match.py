@@ -21,13 +21,23 @@ def get_patch(im):
     return patch
 
 
-def template_vid(X, X_ref, matcher, Y_orig=None):
+def template_vid(X_m, X_ref, matcher, Y_orig, act_ind):
 
     if X_ref.size == 0:
         return []
 
+    X = np.zeros_like(X_m)
+    for i in range(X.shape[0]):
+        if i in act_ind:
+            ind = act_ind.index(i)
+            X[i] = utils.image_with_mask(X_m[i], X_ref[ind],
+                        'background-bbox')
+        else:
+            X[i] = X_m[i]
+
     sim_list = np.zeros((X_ref.shape[0], X.shape[0]), dtype=np.float)
     bb_list = np.zeros((X_ref.shape[0], X.shape[0], 4), dtype=np.int)
+
     for i in range(X_ref.shape[0]):
         for j in range(X.shape[0]):
             out = matcher.match(X[j], X_ref[i])
@@ -63,8 +73,8 @@ def template_vid(X, X_ref, matcher, Y_orig=None):
         patch = get_patch(skimage.color.rgb2gray(ref))
         x, y, w, h = bb[i]
         patch_res = cv2.resize(patch, (w, h), interpolation=cv2.INTER_NEAREST)
-        nim = np.zeros(X_ref.shape[1:])
-        nim[y:y+h, x:x+w] = patch_res
+        nim = np.zeros((X_ref.shape[1], X_ref.shape[2]))
+        nim[y:y+h, x:x+w] = (patch_res > 0)
         X_src_mask[i] = nim
 
         # compare
@@ -73,7 +83,7 @@ def template_vid(X, X_ref, matcher, Y_orig=None):
         ).ravel()
         T_score += np.array(_tinfo)
 
-    X_src = np.zeros(X.shape[:3])
+    X_src = np.zeros(X_m.shape[:3])
     X_src[flag[1]: flag[1]+gt_len] = X_src_mask
 
     return (flag[1], flag[1]+gt_len), T_score, X_src

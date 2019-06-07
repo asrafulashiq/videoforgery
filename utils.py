@@ -57,12 +57,16 @@ def image_with_mask(im, mask, type="foreground", blend=False):
     elif type == "background":
         im_masked = im * (1 - mask)
     elif type == "background-bbox":
+        if len(mask.shape) > 2:
+            mask = skimage.color.rgb2gray(mask) > 0
         xx, yy = np.nonzero(mask.squeeze())
         x1, x2, y1, y2 = np.min(xx), np.max(xx), np.min(yy), np.max(yy)
         mask = np.ones(im.shape[:2], dtype=im.dtype)
         mask[x1:x2, y1:y2] = 0
         im_masked = im * mask[..., None]
     elif type == "foreground-bbox":
+        if len(mask.shape) > 2:
+            mask = skimage.color.rgb2gray(mask) > 0
         xx, yy = np.nonzero(mask.squeeze())
         x1, x2, y1, y2 = np.min(xx), np.max(xx), np.min(yy), np.max(yy)
         mask = np.zeros(im.shape[:2], dtype=im.dtype)
@@ -122,7 +126,7 @@ def iou_time(gt, pred):
 
 
 class TemplateMatch:
-    def __init__(self, range=(0.8, 4), thres=0.5):
+    def __init__(self, range=(0.2, 1.5), thres=0.5):
         self.scale_range = np.linspace(*range, 30)
         self.thres = thres
 
@@ -143,41 +147,60 @@ class TemplateMatch:
         (iH, iW) = image.shape[:2]
 
         # loop over the scales of the image
-        for scale in self.scale_range:
+        for scale in self.scale_range[::-1]:
 
-            if (template.shape[0]*scale) < 5 or (template.shape[1]*scale) < 5:
-                continue
+            # if (template.shape[0]*scale) < 5 or (template.shape[1]*scale) < 5:
+            #     continue
 
-            template_resized = cv2.resize(template, None, fx=scale, fy=scale)
-            r = scale
+            # template_resized = cv2.resize(template, None, fx=scale, fy=scale)
+            # r = scale
+            im_resized = skimage.img_as_ubyte(
+                cv2.resize(image, None, fx=scale, fy=scale))
 
             # if the resized image is smaller than the template, then break
             # from the loop
-            if iH < template_resized.shape[0] or iW < template_resized.shape[1]:
+            # if iH < template_resized.shape[0] or iW < template_resized.shape[1]:
+            #     break
+            if im_resized.shape[0] < template.shape[0] or \
+                im_resized.shape[1] < template.shape[1]:
                 break
 
-            result = cv2.matchTemplate(image, template_resized,
-                                        cv2.TM_CCOEFF_NORMED)
+            im_edged = cv2.Canny(im_resized, 50, 200)
+            temp_edged = cv2.Canny(skimage.img_as_ubyte(template), 50, 200)
+
+            # result = cv2.matchTemplate(image, template_resized,
+            #                             cv2.TM_CCOEFF_NORMED)
+            result = cv2.matchTemplate(
+                im_edged,
+                temp_edged,
+                cv2.TM_CCOEFF_NORMED
+            )
             (_, maxVal, _, maxLoc) = cv2.minMaxLoc(result)
 
             # if we have found a new maximum correlation value, then ipdate
             # the bookkeeping variable
             if found is None or maxVal > found[0]:
-                found = (maxVal, maxLoc, r)
+                found = (maxVal, maxLoc, scale)
                 # print("----------")
                 # print("max val : ", maxVal, " r :", 1 / r)
 
         # unpack the bookkeeping varaible and compute the (x, y) coordinates
         # of the bounding box based on the resized ratio
         (_, maxLoc, r) = found
-        w, h = int(template.shape[1] * r), int(template.shape[0] * r)
-        x, y = maxLoc[:2]
+        # w, h = int(template.shape[1] * r), int(template.shape[0] * r)
+        # x, y = maxLoc[:2]
 
-        # cv2.rectangle(image, (x, y), (x + w - 1, y + h - 1), (1.0, 0.0, 0.0), 4)
+        # # cv2.rectangle(image, (x, y), (x + w - 1, y + h - 1), (1.0, 0.0, 0.0), 4)
 
-        t_res = cv2.resize(template, None, fx=r, fy=r)
+        # t_res = cv2.resize(template, None, fx=r, fy=r)
+        # nim = np.zeros(image.shape[:2])
+        # nim[y: y + t_res.shape[0], x : x+t_res.shape[1]] = (t_res > 0.5)
+
+        x, y = int(maxLoc[0] / r), int(maxLoc[1] / r)
         nim = np.zeros(image.shape[:2])
-        nim[y: y + t_res.shape[0], x : x+t_res.shape[1]] = (t_res > 0.5)
+        tmp_resized = cv2.resize(template, None, fx=1/r, fy=1/r)
+        h, w = tmp_resized.shape[:2]
+        nim[y: y + tmp_resized.shape[0], x : x+tmp_resized.shape[1]] = (tmp_resized > 0.5)
 
         return (x, y, w, h), found[0], nim
 
