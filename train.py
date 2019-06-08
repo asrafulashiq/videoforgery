@@ -25,6 +25,15 @@ def focal_loss(x, t, gamma=2):
     w = w * (1-pt).pow(gamma)
     return F.binary_cross_entropy_with_logits(x, t, w.detach())
 
+def dice_loss(y, labels):
+    smooth = 1
+    y = torch.sigmoid(y.view(-1))
+    lab = labels.view(-1)
+
+    numer = 2 * (y * lab).sum()
+    den = y.sum() + lab.sum()
+
+    return 1 - (numer + smooth) / (den + smooth)
 
 def BCE_loss(y, labels):
     eps = 1e-8
@@ -95,12 +104,13 @@ def train(inputs, labels, model, optimizer, args, iteration, device, logger=None
     y = model(inputs)
 
     # loss = focal_loss(y, labels)
-    loss = BCE_loss(y, labels)
+    # loss = BCE_loss(y, labels)
+    loss = dice_loss(y, labels)
 
     optimizer.zero_grad()
     loss.backward()
 
-    nn.utils.clip_grad_norm_(model.parameters(), args.clip)
+    # nn.utils.clip_grad_norm_(model.parameters(), args.clip)
     optimizer.step()
 
     loss_val = loss.data.cpu().numpy()
@@ -129,7 +139,7 @@ def train_with_boundary(
 
     optimizer.zero_grad()
     loss.backward()
-    nn.utils.clip_grad_norm_(model.parameters(), args.clip)
+    # nn.utils.clip_grad_norm_(model.parameters(), args.clip)
     optimizer.step()
 
     loss_val = loss.data.cpu().numpy()

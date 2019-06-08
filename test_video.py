@@ -43,7 +43,7 @@ if __name__ == "__main__":
     if not os.path.exists("./tmp"):
         os.mkdir("./tmp")
 
-    for k in range(10):
+    for k in range(5):
         path = "./tmp/{}".format(k)
         if os.path.exists(path):
             shutil.rmtree(path)

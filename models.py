@@ -15,7 +15,7 @@ def get_model(type, pretrained=True):
     elif type == "albunet":
         model = AlbuNet(pretrained=pretrained)
     elif type == "deeplab":
-        model = deeplab.DeepLab(num_classes=1)
+        model = deeplab.DeepLab(num_classes=1, backbone='xception')
     else:
         raise Exception("Wrong model")
     return model
@@ -24,20 +24,20 @@ def get_model(type, pretrained=True):
 class Model(nn.Module):
     def __init__(self, pretrained=True, type="unet"):
         super().__init__()
-        self.unet = get_model(type, pretrained)
+        self.base = get_model(type, pretrained)
 
     def forward(self, x):
-        x = self.unet(x)
+        x = self.base(x)
         return x
 
 
 class Model_boundary(nn.Module):
     def __init__(self, pretrained=True):
         super().__init__()
-        self.unet = UNet11_two_branch_out(pretrained=pretrained)
+        self.base = UNet11_two_branch_out(pretrained=pretrained)
 
     def forward(self, x):
-        y1, y2 = self.unet(x)
+        y1, y2 = self.base(x)
         return y1, y2
 
 

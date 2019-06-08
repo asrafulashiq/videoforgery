@@ -473,9 +473,11 @@ class Dataset_image:
             yield X_im, X_ref, match_ind, first_ind
 
     def get_frames_from_video(self, do_transform=False,
-                              get_all=False, is_test=False):
+                              is_test=False):
         # randomly select one video and get frames (with labels)
-        name = np.random.choice(self.data)
+        ind = np.random.choice(self.test_index)
+        name = self.data[ind]
+        print("Video ", name["name"])
         for im_file, mask_file in name["files"]:
             if Path(im_file).suffix == ".png":
                 im_file = str(im_file)

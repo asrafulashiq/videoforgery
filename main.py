@@ -7,7 +7,7 @@ from tensorboardX import SummaryWriter
 from tqdm import tqdm
 
 # custom module
-
+import models
 from models import Model, Model_boundary
 import config
 from dataset import Dataset_image
@@ -51,10 +51,19 @@ if __name__ == "__main__":
 
     model = model.to(device)
 
+    model_params = filter(lambda p: p.requires_grad, model.parameters())
+
+    if args.model_type == "deeplab":
+        model_params = [{'params': model.base.get_1x_lr_params(), 'lr': args.lr / 10},
+                {'params': model.base.get_10x_lr_params(), 'lr': args.lr}]
+
     # optimizer
     optimizer = torch.optim.Adam(
-        filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr
+       model_params , lr=args.lr
     )
+
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.5)
+
     iteration = 0
     init_ep = 0
     # load if pretrained model
@@ -95,6 +104,8 @@ if __name__ == "__main__":
                 + args.videoset
                 + ".pkl",
             )
+
+            scheduler.step()
 
             # test
             test(dataset, model, args, iteration, device, logger, max_iter=800)
