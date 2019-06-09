@@ -30,13 +30,14 @@ class CustomTransform:
         if img is not None:
             if img.dtype == np.uint8:
                 img = (img / 255.0).astype(np.float32)
-
-            img = cv2.resize(img, self.size, interpolation=cv2.INTER_LINEAR)
+            if img.shape[0] != self.size[0] or img.shape[1] != self.size[1]:
+                img = cv2.resize(img, self.size, interpolation=cv2.INTER_LINEAR)
             img = (img - self.mean) / self.std
             img = self.to_tensor(img)
 
         if mask is not None:
-            mask = cv2.resize(mask, self.size, interpolation=cv2.INTER_NEAREST)
+            if mask.shape[0] != self.size[0] or mask.shape[1] != self.size[1]:
+                mask = cv2.resize(mask, self.size, interpolation=cv2.INTER_NEAREST)
             mask = self.to_tensor(mask)
 
             return img, mask
@@ -78,6 +79,51 @@ def image_with_mask(im, mask, type="foreground", blend=False):
             im, blend_ratio, im_masked, 1 - blend_ratio, 0, None
         )
     return im_masked
+
+
+def patch_transform(im_mask, mask_bb, new_centroid, translate=None, scale=None):
+    if len(mask_bb) < 4:
+        return im_mask.copy()
+
+    patch_mask = im_mask[mask_bb[1]:mask_bb[3], mask_bb[0]:mask_bb[2]]
+    resized_patch = cv2.resize(patch_mask, None, fx=scale, fy=scale,
+                               interpolation=cv2.INTER_NEAREST)
+
+    hp, wp = resized_patch.shape[:2]
+
+    topx = int(max(0, new_centroid[0] - wp/2))
+    topy = int(max(0, new_centroid[1] - hp/2))
+
+    bottomx = int(min(topx+wp, im_mask.shape[1]))
+    bottomy = int(min(topy+hp, im_mask.shape[0]))
+
+    w, h = bottomx - topx, bottomy - topy
+
+    new_mask = np.zeros(im_mask.shape, dtype=patch_mask.dtype)
+
+    new_mask[topy:topy+h, topx:topx+w] = resized_patch[:h, :w]
+
+    return new_mask
+
+
+def splice(img_target, img_source, img_mask, do_blend=False):
+
+    if img_target.shape != img_source.shape:
+        img_target = skimage.transform.resize(
+            img_target, img_mask.shape[:2], anti_aliasing=True, mode='reflect'
+        )
+        # img_target = skimage.img_as_ubyte(img_target)
+
+    if len(img_mask.shape) < 3:
+        img_mask = img_mask[..., None]
+
+    img_mask = (img_mask > 0)
+    if img_mask.dtype != np.float32:
+        img_mask = img_mask.astype(np.float32)
+    img_mani = img_mask * img_source + img_target * (1 - img_mask)
+    # img_mani = img_mani.astype(np.uint8)
+
+    return img_mani
 
 
 def overlay_masks(m1, m2, alpha=0.5):

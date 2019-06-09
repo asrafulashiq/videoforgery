@@ -316,7 +316,7 @@ class Dataset_image:
                 if data[f]["mask_orig"] is not None:
                     list_forged_ind.append(i)
             if list_forged_ind:
-                break>
+                break
 
         X_im = torch.empty(
             num, 3, 3, self.args.size, self.args.size, dtype=torch.float32

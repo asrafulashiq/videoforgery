@@ -38,7 +38,11 @@ if __name__ == "__main__":
 
     # dataset
     tsfm = CustomTransform(size=args.size)
-    dataset = Dataset_image(args=args, transform=tsfm)
+    if args.videoset == 'coco':
+        from dataset_coco import COCODataset
+        dataset = COCODataset(args=args, transform=tsfm)
+    else:
+        dataset = Dataset_image(args=args, transform=tsfm)
 
     # model
     if args.boundary:
@@ -64,7 +68,7 @@ if __name__ == "__main__":
     # optimizer
     optimizer = torch.optim.Adam(model_params, lr=args.lr)
 
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.5)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 
     iteration = 0
     init_ep = 0
@@ -104,6 +108,6 @@ if __name__ == "__main__":
             scheduler.step()
 
             # test
-            test(dataset, model, args, iteration, device, logger, max_iter=800)
+            test(dataset, model, args, iteration, device, logger, max_iter=500)
 
         logger.close()
