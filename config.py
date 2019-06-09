@@ -23,6 +23,9 @@ def arg_common():
                         help="gradient clipping")
     parser.add_argument("--model-type", default="unet", type=str,
                         help="model type (unet/albunet/deeplab)")
+    parser.add_argument("--loss-type", default="bce", type=str,
+                        help="loss type (bce / dice / l1)")
+ 
     return parser
 
 def arg_main():

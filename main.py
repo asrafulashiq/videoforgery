@@ -18,7 +18,6 @@ from test import test
 import warnings
 warnings.filterwarnings("ignore")
 
-
 if __name__ == "__main__":
 
     # device
@@ -54,13 +53,16 @@ if __name__ == "__main__":
     model_params = filter(lambda p: p.requires_grad, model.parameters())
 
     if args.model_type == "deeplab":
-        model_params = [{'params': model.base.get_1x_lr_params(), 'lr': args.lr / 10},
-                {'params': model.base.get_10x_lr_params(), 'lr': args.lr}]
+        model_params = [{
+            'params': model.base.get_1x_lr_params(),
+            'lr': args.lr / 10
+        }, {
+            'params': model.base.get_10x_lr_params(),
+            'lr': args.lr
+        }]
 
     # optimizer
-    optimizer = torch.optim.Adam(
-       model_params , lr=args.lr
-    )
+    optimizer = torch.optim.Adam(model_params, lr=args.lr)
 
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.5)
 
@@ -80,11 +82,10 @@ if __name__ == "__main__":
         for ep in tqdm(range(init_ep, args.epoch)):
             # train
             for x_batch, y_batch, _ in dataset.load_data(
-                args.batch_size, is_training=True, with_boundary=args.boundary
-            ):
-                fn_train(
-                    x_batch, y_batch, model, optimizer, args, iteration, device, logger
-                )
+                    args.batch_size, is_training=True,
+                    with_boundary=args.boundary):
+                fn_train(x_batch, y_batch, model, optimizer, args, iteration,
+                         device, logger)
                 iteration += 1
                 # if iteration % 10 == 1:
                 #     test(dataset, model, args, iteration, device, logger, max_iter=800)
@@ -96,13 +97,8 @@ if __name__ == "__main__":
                     "model_state": model.state_dict(),
                     "opt_state": optimizer.state_dict(),
                 },
-                "./ckpt/"
-                + args.model
-                + "_"
-                + args.model_type
-                + "_"
-                + args.videoset
-                + ".pkl",
+                "./ckpt/" + args.model + "_" + args.model_type + "_" +
+                args.videoset + "_" + args.loss_type + ".pkl",
             )
 
             scheduler.step()

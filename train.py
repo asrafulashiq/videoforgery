@@ -103,9 +103,14 @@ def train(inputs, labels, model, optimizer, args, iteration, device, logger=None
     # prediction
     y = model(inputs)
 
+    if args.loss_type == "dice":
+        fn_loss = dice_loss
+    else:
+        fn_loss = BCE_loss
+
     # loss = focal_loss(y, labels)
     # loss = BCE_loss(y, labels)
-    loss = dice_loss(y, labels)
+    loss = fn_loss(y, labels)
 
     optimizer.zero_grad()
     loss.backward()
