@@ -93,9 +93,14 @@ def train_match_in_the_video(
         logger.add_scalar("loss/loss_ind", loss, iteration)
 
 
-def train(inputs, labels, model, optimizer, args, iteration, device, logger=None):
+def train(inputs, labels, model, optimizer, args, iteration, device, logger=None,
+         validate=False):
 
-    model.train(True)
+    if validate:
+        model.eval()
+    else:
+        model.train()
+
     inputs = inputs.to(device)
     labels = labels.to(device)
 
@@ -110,25 +115,36 @@ def train(inputs, labels, model, optimizer, args, iteration, device, logger=None
     # loss = focal_loss(y, labels)
     # loss = BCE_loss(y, labels)
     loss = fn_loss(y, labels)
-
-    optimizer.zero_grad()
-    loss.backward()
-
-    # nn.utils.clip_grad_norm_(model.parameters(), args.clip)
-    optimizer.step()
-
     loss_val = loss.data.cpu().numpy()
-    print(f"Iteration: {iteration}  Loss : {loss_val:.4f}")
+
+    if not validate:
+        optimizer.zero_grad()
+        loss.backward()
+        # nn.utils.clip_grad_norm_(model.parameters(), args.clip)
+        optimizer.step()
+        print(f"Iteration: {iteration:4d} Loss : {loss_val:.4f}")
+    else:
+        print(f"Iteration: {iteration:4d} \t\t Loss : {loss_val:.4f}")
+
 
     if logger is not None:
-        logger.add_scalar("loss/total", loss, iteration)
+        if validate:
+            logger.add_scalar("val_loss/total", loss, iteration)
+        else:
+            logger.add_scalar("train_loss/total", loss, iteration)
+
 
 
 def train_with_boundary(
-    inputs, labels, model, optimizer, args, iteration, device, logger=None
+    inputs, labels, model, optimizer, args, iteration, device, logger=None,
+    validate=False
 ):
 
-    model.train(True)
+    if validate:
+        model.eval()
+    else:
+        model.train()
+
     inputs = inputs.to(device)
     labels = labels.to(device)
 
@@ -141,20 +157,33 @@ def train_with_boundary(
 
     loss = loss_mask + args.gamma_b * loss_boundary
 
-    optimizer.zero_grad()
-    loss.backward()
-    # nn.utils.clip_grad_norm_(model.parameters(), args.clip)
-    optimizer.step()
-
     loss_val = loss.data.cpu().numpy()
 
-    print(
-        f"Iteration: {iteration:4d}, loss_m : {loss_mask.data.cpu().numpy():.4f} "
-        + f"loss_b : {loss_boundary.data.cpu().numpy():.4f} "
-        + f"Loss : {loss_val:.4f}"
-    )
+    if not validate:
+        optimizer.zero_grad()
+        loss.backward()
+        # nn.utils.clip_grad_norm_(model.parameters(), args.clip)
+        optimizer.step()
+
+
+        print(
+            f"Iteration: {iteration:4d}, loss_m : {loss_mask.data.cpu().numpy():.4f} "
+            + f"loss_b : {loss_boundary.data.cpu().numpy():.4f} "
+            + f"Loss : {loss_val:.4f}"
+        )
+    else:
+        print(
+            f"VALIDATE:::: Iteration: {iteration:4d}, loss_m : {loss_mask.data.cpu().numpy():.4f} "
+            + f"loss_b : {loss_boundary.data.cpu().numpy():.4f} "
+            + f"Loss : {loss_val:.4f}"
+        )
 
     if logger is not None:
-        logger.add_scalar("loss/total", loss, iteration)
-        logger.add_scalar("loss/mask", loss_mask, iteration)
-        logger.add_scalar("loss/boundary", loss_boundary, iteration)
+        if validate:
+            pref = "val_loss"
+        else:
+            pref = "loss"
+
+        logger.add_scalar(f"{pref}/total", loss, iteration)
+        logger.add_scalar(f"{pref}/mask", loss_mask, iteration)
+        logger.add_scalar(f"{pref}/boundary", loss_boundary, iteration)

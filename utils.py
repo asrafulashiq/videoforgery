@@ -18,6 +18,7 @@ def fscore(T_score):
     f_score = 2 * Tp / (2 * Tp + Fp + Fn)
     return f_score
 
+
 class CustomTransform:
     def __init__(self, size=224):
         self.size = (size, size)
@@ -31,13 +32,15 @@ class CustomTransform:
             if img.dtype == np.uint8:
                 img = (img / 255.0).astype(np.float32)
             if img.shape[0] != self.size[0] or img.shape[1] != self.size[1]:
-                img = cv2.resize(img, self.size, interpolation=cv2.INTER_LINEAR)
+                img = cv2.resize(
+                    img, self.size, interpolation=cv2.INTER_LINEAR)
             img = (img - self.mean) / self.std
             img = self.to_tensor(img)
 
         if mask is not None:
             if mask.shape[0] != self.size[0] or mask.shape[1] != self.size[1]:
-                mask = cv2.resize(mask, self.size, interpolation=cv2.INTER_NEAREST)
+                mask = cv2.resize(
+                    mask, self.size, interpolation=cv2.INTER_NEAREST)
             mask = self.to_tensor(mask)
 
             return img, mask
@@ -208,7 +211,7 @@ class TemplateMatch:
             # if iH < template_resized.shape[0] or iW < template_resized.shape[1]:
             #     break
             if im_resized.shape[0] < template.shape[0] or \
-                im_resized.shape[1] < template.shape[1]:
+                    im_resized.shape[1] < template.shape[1]:
                 break
 
             im_edged = cv2.Canny(im_resized, 50, 200)
@@ -246,7 +249,8 @@ class TemplateMatch:
         nim = np.zeros(image.shape[:2])
         tmp_resized = cv2.resize(template, None, fx=1/r, fy=1/r)
         h, w = tmp_resized.shape[:2]
-        nim[y: y + tmp_resized.shape[0], x : x+tmp_resized.shape[1]] = (tmp_resized > 0.5)
+        nim[y: y + tmp_resized.shape[0], x: x +
+            tmp_resized.shape[1]] = (tmp_resized > 0.5)
 
         return (x, y, w, h), found[0], nim
 

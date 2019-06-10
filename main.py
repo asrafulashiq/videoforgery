@@ -33,9 +33,17 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
+    # model name
+    model_name = args.model + "_" + args.model_type + "_" + \
+                args.videoset + "_" + args.loss_type
+
+    if args.boundary:
+        model_name += "_boundary"
+
+    print(f"Model Name: {model_name}")
+
     # logger
-    logger = SummaryWriter("./logs/" + args.model + "_" + args.model_type + "_" +
-                           args.videoset + "_" + args.loss_type)
+    logger = SummaryWriter("./logs/" + model_name)
 
     # dataset
     tsfm = CustomTransform(size=args.size)
@@ -71,7 +79,7 @@ if __name__ == "__main__":
 
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 
-    iteration = 0
+    iteration = 1
     init_ep = 0
     # load if pretrained model
     if args.ckpt is not None:
@@ -79,6 +87,10 @@ if __name__ == "__main__":
         model.load_state_dict(checkpoint["model_state"])
         optimizer.load_state_dict(checkpoint["opt_state"])
         # init_ep = checkpoint["epoch"]
+
+    if args.validate:
+        val_loader = dataset.load_data(args.batch_size*3, is_training=False,
+                                       with_boundary=args.boundary)
 
     # train
     if args.test:  # test mode
@@ -91,10 +103,21 @@ if __name__ == "__main__":
                     with_boundary=args.boundary):
                 fn_train(x_batch, y_batch, model, optimizer, args, iteration,
                          device, logger)
-                iteration += 1
-                # if iteration % 10 == 1:
-                #     test(dataset, model, args, iteration, device, logger, max_iter=800)
 
+                if args.validate and iteration % 10 == 0:
+                    # validate
+                    try:
+                        x_val, y_val, _ = next(val_loader)
+                    except StopIteration:
+                        val_loader = dataset.load_data(args.batch_size, is_training=False,
+                                                       with_boundary=args.boundary)
+                        x_val, y_val, _ = next(val_loader)
+
+                    with torch.no_grad():
+                        fn_train(x_batch, y_batch, model, optimizer, args, iteration,
+                                 device, logger, validate=True)
+
+                iteration += 1
             # save current state
             torch.save(
                 {
@@ -102,8 +125,7 @@ if __name__ == "__main__":
                     "model_state": model.state_dict(),
                     "opt_state": optimizer.state_dict(),
                 },
-                "./ckpt/" + args.model + "_" + args.model_type + "_" +
-                args.videoset + "_" + args.loss_type + ".pkl",
+                "./ckpt/" + model_name + ".pkl",
             )
 
             scheduler.step()

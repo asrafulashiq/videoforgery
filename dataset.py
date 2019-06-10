@@ -1,6 +1,7 @@
 from __future__ import print_function
 from pathlib import Path
-import os, sys
+import os
+import sys
 import pickle
 import cv2
 import skimage
@@ -28,6 +29,7 @@ def add_sorp(im, type="pepper"):
             im[mask > 0] = 1
 
     return im
+
 
 def get_boundary(im):
     kernel = np.ones((5, 5), dtype=np.float32)
@@ -104,7 +106,6 @@ class Dataset_image:
         #     im = add_sorp(im, type="pepper")
         return im
 
-
     def load_videos_all(self):
         for ind in self.test_index:
             D = self.data[ind]
@@ -119,9 +120,12 @@ class Dataset_image:
             offset = data[filenames[0]]["offset"]
 
             _len = len(filenames)
-            X = np.zeros((_len, self.args.size, self.args.size, 3), dtype=np.float32)
-            Y_forge = np.zeros((_len, self.args.size, self.args.size), dtype=np.float32)
-            Y_orig = np.zeros((_len, self.args.size, self.args.size), dtype=np.float32)
+            X = np.zeros((_len, self.args.size, self.args.size, 3),
+                         dtype=np.float32)
+            Y_forge = np.zeros(
+                (_len, self.args.size, self.args.size), dtype=np.float32)
+            Y_orig = np.zeros(
+                (_len, self.args.size, self.args.size), dtype=np.float32)
 
             flag = False
             forge_time = None
@@ -146,16 +150,19 @@ class Dataset_image:
 
                 X[i] = cv2.resize(im, (self.args.size, self.args.size))
                 if mask_new is None:
-                    mask_new = np.zeros((self.args.size, self.args.size), dtype=np.float32)
-                    mask_orig = np.zeros((self.args.size, self.args.size), dtype=np.float32)
-                Y_forge[i] = (cv2.resize(mask_new, (self.args.size, self.args.size)) > 0.5)
-                Y_orig[i-offset] = (cv2.resize(mask_orig, (self.args.size, self.args.size)) > 0.5)
+                    mask_new = np.zeros(
+                        (self.args.size, self.args.size), dtype=np.float32)
+                    mask_orig = np.zeros(
+                        (self.args.size, self.args.size), dtype=np.float32)
+                Y_forge[i] = (cv2.resize(
+                    mask_new, (self.args.size, self.args.size)) > 0.5)
+                Y_orig[i-offset] = (cv2.resize(mask_orig,
+                                               (self.args.size, self.args.size)) > 0.5)
 
             if forge_time is not None and forge_time[1] == -1:
                 forge_time[1] = i
                 gt_time[1] = i - offset
             yield X, Y_forge, forge_time, Y_orig, gt_time, name
-
 
     def load_videos_track(self, is_training=True, add_prev=True, is_shuffle=True):
 
@@ -178,7 +185,7 @@ class Dataset_image:
             if add_prev:
                 dim = 4
             else:
-                dim=3
+                dim = 3
 
             Im = torch.zeros(maxlen, dim, self.args.size, self.args.size)
             GT = torch.zeros(maxlen, 1, self.args.size, self.args.size)
@@ -194,7 +201,8 @@ class Dataset_image:
                 except AssertionError:
                     continue
 
-                image, mask = self.__get_im(im_file, mask_file, do_transform=False)
+                image, mask = self.__get_im(
+                    im_file, mask_file, do_transform=False)
 
                 if self.transform:
                     image_t, mask_t = self.transform(image, mask)
@@ -216,19 +224,22 @@ class Dataset_image:
 
                 if counter % maxlen == 0:
                     yield Im, GT
-                    Im = torch.zeros(maxlen, dim, self.args.size, self.args.size)
+                    Im = torch.zeros(
+                        maxlen, dim, self.args.size, self.args.size)
                     GT = torch.zeros(maxlen, 1, self.args.size, self.args.size)
                     counter = 0
                 counter += 1
 
     def load_data(self, batch=20, is_training=True, shuffle=True, with_boundary=False):
         counter = 0
-        X = torch.zeros((batch, 3, self.args.size, self.args.size), dtype=torch.float32)
+        X = torch.zeros((batch, 3, self.args.size,
+                         self.args.size), dtype=torch.float32)
         if with_boundary:
             ysize = 2
         else:
             ysize = 1
-        Y = torch.zeros((batch, ysize, self.args.size, self.args.size), dtype=torch.float32)
+        Y = torch.zeros((batch, ysize, self.args.size,
+                         self.args.size), dtype=torch.float32)
 
         Info = []
 
@@ -239,7 +250,8 @@ class Dataset_image:
             if (is_training and i in self.train_index) or (
                 not is_training and i in self.test_index
             ):
-                tmp = self.__get_im(im_file, mask_file, with_boundary=with_boundary)
+                tmp = self.__get_im(im_file, mask_file,
+                                    with_boundary=with_boundary)
                 X[counter] = tmp[0]
                 Y[counter, 0] = tmp[1]
                 if with_boundary:
@@ -260,7 +272,8 @@ class Dataset_image:
                         (batch, 3, self.args.size, self.args.size), dtype=torch.float32
                     )
                     Y = torch.zeros(
-                        (batch, ysize, self.args.size, self.args.size), dtype=torch.float32
+                        (batch, ysize, self.args.size,
+                         self.args.size), dtype=torch.float32
                     )
                     Info = []
                     counter = 0
@@ -354,16 +367,19 @@ class Dataset_image:
 
             if data[src_file]["mask_new"] is not None:
                 _mask = data[src_file]["mask_new"]
-                im_src_pos = self.image_with_mask(im_src_pos, _mask, type="background")
+                im_src_pos = self.image_with_mask(
+                    im_src_pos, _mask, type="background")
                 # im_src_pos = add_sorp(im_src_pos, type="pepper")
 
-            neg_fname = os.path.join(self.im_mani_root, *src_neg_file.parts[-2:])
+            neg_fname = os.path.join(
+                self.im_mani_root, *src_neg_file.parts[-2:])
             im_src_neg = skimage.img_as_float32(io.imread(neg_fname))
             ind_src_neg = src_neg_ind / len(filenames)
 
             if data[src_neg_file]["mask_new"] is not None:
                 _mask = data[src_neg_file]["mask_new"]
-                im_src_neg = self.image_with_mask(im_src_neg, _mask, type="background")
+                im_src_neg = self.image_with_mask(
+                    im_src_neg, _mask, type="background")
                 # im_src_neg = add_sorp(im_src_neg, type="pepper")
 
             if self.transform:
@@ -375,7 +391,8 @@ class Dataset_image:
             X_im[i, 1] = im_src_pos
             X_im[i, 2] = im_src_neg
 
-            X_ind[i] = torch.tensor([ind_src_pos, ind_src_neg], dtype=torch.float32)
+            X_ind[i] = torch.tensor(
+                [ind_src_pos, ind_src_neg], dtype=torch.float32)
         return X_im, X_ind
 
     def image_with_mask(self, im, mask, type="foreground"):
@@ -426,7 +443,8 @@ class Dataset_image:
 
             num = len(filenames)
             # X_im = torch.empty(num, 3, self.args.size, self.args.size, dtype=torch.float32)
-            X_im = np.zeros((num, self.args.size, self.args.size, 3), dtype=np.float32)
+            X_im = np.zeros(
+                (num, self.args.size, self.args.size, 3), dtype=np.float32)
 
             _first = False
             X_ref = None
@@ -462,9 +480,11 @@ class Dataset_image:
                             im_ref = cv2.resize(
                                 im_ref, (self.args.size, self.args.size)
                             )
-                            X_ref = np.concatenate((X_ref, im_ref[None, ...]), 0)
+                            X_ref = np.concatenate(
+                                (X_ref, im_ref[None, ...]), 0)
 
-                    im = self.image_with_mask(im, im_mask_new, type="background-bbox")
+                    im = self.image_with_mask(
+                        im, im_mask_new, type="background-bbox")
 
                 # if self.transform:
                 #     im = self.transform(im)
@@ -486,6 +506,7 @@ class Dataset_image:
                     assert os.path.exists(mask_file)
                 except AssertionError:
                     continue
-            image, mask = self.__get_im(im_file, mask_file, do_transform=do_transform)
+            image, mask = self.__get_im(
+                im_file, mask_file, do_transform=do_transform)
 
             yield image, mask

@@ -86,7 +86,6 @@ class UNet11_two_branch_out(nn.Module):
         self.dec1 = ConvRelu(num_filters * (2 + 1), num_filters)
         self.final_1 = nn.Conv2d(num_filters, 1, kernel_size=1)
 
-
         # second decoder
         self.dec5_2 = DecoderBlock(
             num_filters * (16 + 8), num_filters * 8 * 2, num_filters * 8
@@ -307,7 +306,8 @@ class AlbuNet(nn.Module):
 
         if mod:
             enc = self.encoder.conv1
-            conv1 = nn.Conv2d(mod_chan, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+            conv1 = nn.Conv2d(mod_chan, 64, kernel_size=(
+                7, 7), stride=(2, 2), padding=(3, 3), bias=False)
             # conv1.load_state_dict(self.encoder.conv1.state_dict())
             conv1.weight.data[:, :3].copy_(enc.weight.data[:, :3])
             conv1.weight.data[:, -1].copy_(enc.weight.data[:, -1])
