@@ -16,6 +16,8 @@ def arg_common():
     parser.add_argument("--test", action='store_true', help="test only mode")
     parser.add_argument("--validate", action='store_true',
                         help="whether to validate only mode")
+    parser.add_argument("--with-src", action="store_true",
+                        help="include source mask")
 
     parser.add_argument("--size", type=int, default=224, help="image size")
     parser.add_argument("--split", type=float, default=0.7, help="train split")

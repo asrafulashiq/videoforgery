@@ -244,6 +244,46 @@ def test(dataset, model, args, iteration, device, logger=None, max_iter=None):
         logger.add_scalar("score/f1", f1_mean, iteration)
 
 
+@torch.no_grad()
+def test_with_src(dataset, model, args, iteration, device, logger=None, max_iter=None):
+    model.eval()
+    counter = 0
+
+    Tp, Tn, Fp, Fn = 0, 0, 0, 0
+
+    for X, labels, info in tqdm(dataset.load_data_with_src(batch=40, is_training=False)):
+        X = X.to(device)
+        labels = labels.to(device)
+        preds = model(X)
+        if args.boundary:
+            preds = preds[0]
+        preds = torch.sigmoid(preds)
+
+        preds = preds.squeeze().data.cpu().numpy()
+        labels = labels.squeeze().data.cpu().numpy()
+        labels = (labels > 0.5).astype(np.float32)
+
+        tn, fp, fn, tp = metrics.confusion_matrix(
+            labels.ravel(), (preds > args.thres).ravel()
+        ).ravel()
+        Tp, Tn, Fp, Fn = Tp + tp, Tn + tn, Fp + fp, Fn + fn
+
+        counter += X.shape[0]
+
+        if max_iter is not None and counter > max_iter:
+            break
+
+    f1_mean = 2. * Tp / (2 * Tp + Fp + Fn)
+    print()
+    print("TEST")
+    print(f"F1 Score: {f1_mean:.4f}")
+
+    if logger is not None:
+        logger.add_scalar("score/f1", f1_mean, iteration)
+
+
+
+
 def score_report(y_pred, y_gt, args, iteration, logger=None):
     # ROC AUC
     auc_roc = metrics.roc_auc_score(y_gt, y_pred)

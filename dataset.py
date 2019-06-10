@@ -9,6 +9,7 @@ from skimage import io
 import numpy as np
 import torch
 from torchvision import transforms
+from collections import defaultdict
 
 
 def add_sorp(im, type="pepper"):
@@ -62,6 +63,8 @@ class Dataset_image:
         self.im_mani_root = self.data_root / "vid"
         self._parse_all_images_with_gt()
 
+        self._parse_images_with_copy_src()
+
     def split_train_test(self):
         ind = np.arange(len(self.data))
         np.random.shuffle(ind)
@@ -106,6 +109,43 @@ class Dataset_image:
         #     im = add_sorp(im, type="pepper")
         return im
 
+    def _parse_images_with_copy_src(self):
+        Dict = defaultdict(lambda : [None, None, None])  # (i, forged, src)
+        for i_d, D in enumerate(self.data):
+            name = D['name']
+            gt_file = os.path.join(str(self.gt_root), Path(name).name + ".pkl")
+
+            with open(gt_file, "rb") as fp:
+                data = pickle.load(fp)
+
+            filenames = sorted(list(data.keys()), key=lambda x: int(x.stem))
+            offset = data[filenames[0]]["offset"]
+
+            for i, cur_file in enumerate(filenames):
+                cur_data = data[cur_file]
+                mask_orig = cur_data["mask_orig"]
+                mask_new = cur_data["mask_new"]
+
+                fname = os.path.join(self.im_mani_root, *cur_file.parts[-2:])
+
+                Dict[fname][0] = i_d
+                fmask = os.path.join(self.mask_root, *cur_file.parts[-2:])
+                Dict[fname][1] = fmask
+
+                if mask_new is not None:
+                    orig_file = filenames[i-offset]
+                    forig = os.path.join(
+                        self.im_mani_root, *orig_file.parts[-2:])
+                    Dict[forig][2] = fmask
+
+        self.__im_file_with_src_copy = []
+        for fp in Dict:
+            iv, fmask, forig = Dict[fp]
+            self.__im_file_with_src_copy.append(
+                (iv, fp, fmask, forig)
+            )
+
+
     def load_videos_all(self):
         for ind in self.test_index:
             D = self.data[ind]
@@ -116,7 +156,7 @@ class Dataset_image:
             with open(gt_file, "rb") as fp:
                 data = pickle.load(fp)
 
-            filenames = list(data.keys())
+            filenames = sorted(list(data.keys()), key=lambda x: int(x.stem))
             offset = data[filenames[0]]["offset"]
 
             _len = len(filenames)
@@ -130,7 +170,7 @@ class Dataset_image:
             flag = False
             forge_time = None
             gt_time = None
-            for i, cur_file in enumerate(sorted(filenames)):
+            for i, cur_file in enumerate(filenames):
                 cur_data = data[cur_file]
                 mask_orig = cur_data["mask_orig"]
                 mask_new = cur_data["mask_new"]
@@ -230,6 +270,53 @@ class Dataset_image:
                     counter = 0
                 counter += 1
 
+    def load_data_with_src(self, batch=20, is_training=True, shuffle=True, with_boundary=False):
+        counter = 0
+        X = torch.zeros((batch, 3, self.args.size,
+                         self.args.size), dtype=torch.float32)
+        ysize=3
+        Y = torch.zeros((batch, ysize, self.args.size,
+                         self.args.size), dtype=torch.float32)
+
+        Info = []
+
+        if shuffle:
+            np.random.shuffle(self.__im_files_with_gt)
+
+        for i, im_file, mask_file, src_file in self.__im_file_with_src_copy:
+            if (is_training and i in self.train_index) or (
+                not is_training and i in self.test_index
+            ):
+                tmp = self.__get_im(im_file, mask_file, with_src=True,
+                                    src_file=src_file)
+                X[counter] = tmp[0]
+                Y[counter, 0] = tmp[1]
+                Y[counter, 1] = tmp[2]
+                Y[counter, 2] = tmp[3]
+                Info.append((im_file, mask_file, src_file))
+                counter += 1
+                if counter % batch == 0:
+                    if torch.any(torch.isnan(Y)):
+                        import pdb
+                        pdb.set_trace()
+
+                    yield X, Y, Info
+
+                    if torch.any(Y < 0):
+                        import pdb
+                        pdb.set_trace()
+
+                    X = torch.zeros(
+                        (batch, 3, self.args.size, self.args.size), dtype=torch.float32
+                    )
+                    Y = torch.zeros(
+                        (batch, ysize, self.args.size,
+                         self.args.size), dtype=torch.float32
+                    )
+                    Info = []
+                    counter = 0
+
+
     def load_data(self, batch=20, is_training=True, shuffle=True, with_boundary=False):
         counter = 0
         X = torch.zeros((batch, 3, self.args.size,
@@ -281,7 +368,8 @@ class Dataset_image:
     # def __len__(self):
     #     return len(self.__im_files_with_gt)
 
-    def __get_im(self, im_file, mask_file, do_transform=True, with_boundary=False):
+    def __get_im(self, im_file, mask_file, do_transform=True,
+                    with_boundary=False, with_src=False, src_file=None):
         image = io.imread(im_file)
         image = skimage.img_as_float32(image)  # image in [0-1] range
 
@@ -298,18 +386,27 @@ class Dataset_image:
         if with_boundary:
             boundary = get_boundary(mask)
 
+        if with_src:
+            mask_src = np.zeros(mask.shape[:2], dtype=np.float32)
+            if src_file is not None:
+                _mask_src = skimage.img_as_float32(io.imread(src_file))
+                mask_src[_mask_src[..., 0] > 0.5] = 1
+
+            mask_back = np.zeros(mask.shape[:2], dtype=np.float32)
+            mask_back[(mask==0) & (mask_src==0)] = 1
+
         if do_transform and self.transform is not None:
             image, mask = self.transform(image, mask)
 
-            if torch.any(mask < 0):
-                import pdb
-
-                pdb.set_trace()
-
             if with_boundary:
                 _, boundary = self.transform(None, boundary)
+            if with_src:
+                _, mask_src = self.transform(None, mask_src)
+                _, mask_back = self.transform(None, mask_back)
         if with_boundary:
             return image, mask, boundary
+        elif with_src:
+            return image, mask, mask_src, mask_back
         else:
             return image, mask
 
