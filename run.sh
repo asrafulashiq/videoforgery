@@ -1,6 +1,6 @@
 
 
-export CUDA_VISIBLE_DEVICES=2,3
+set -gx CUDA_VISIBLE_DEVICES 2,3
 
 # test on coco pretrained, with and without boundary
 
@@ -27,10 +27,10 @@ python main.py --videoset youtube --model unet  --epoch 10 --lr 0.1 \
 
 
 # test with batch-size
-python main.py --videoset youtube --batch-size 10 --model unet  --epoch 20 --lr 1e-4 \
+python main.py --videoset youtube --batch-size 10 --model unet  --epoch 10 --lr 1e-4 \
            --ckpt ckpt/base_unet_coco_bce.pkl >> tmp/utube_bs_1.txt
 
-python main.py --videoset youtube --batch-size 60 --model unet  --epoch 20 --lr 1e-4 \
+python main.py --videoset youtube --batch-size 60 --model unet  --epoch 10 --lr 1e-4 \
            --ckpt ckpt/base_unet_coco_bce.pkl >> tmp/utube_bs_2.txt
 
 
