@@ -42,17 +42,17 @@ def BCE_loss(y, labels):
 
     wgt = torch.sum(labels) / (labels.shape[0] * labels.shape[1] * labels.shape[2])
 
-    _loss = -(1 - wgt) * labels * F.logsigmoid(y) - wgt * (1 - labels) * torch.log(
+    bce_loss = -(1 - wgt) * labels * F.logsigmoid(y) - wgt * (1 - labels) * torch.log(
         1 - torch.sigmoid(y) + eps
     )
-    _loss = torch.mean(_loss)
+    bce_loss = torch.mean(bce_loss)
 
-    if torch.isnan(_loss) or _loss < 0:
+    if torch.isnan(bce_loss) or bce_loss < 0:
         import pdb
 
         pdb.set_trace()
 
-    return _loss.float()
+    return bce_loss.float()
 
 
 def Index_loss(ysim, ydis, ind_gt, device):
@@ -61,12 +61,11 @@ def Index_loss(ysim, ydis, ind_gt, device):
     ind_gt = ind_gt.squeeze()
 
     y_gt = torch.abs(ind_gt[:, 0] - ind_gt[:, 1])
-    # _loss = torch.mean(torch.max(y_gt - y, torch.FloatTensor([0]).to(device)))
+    # l1_loss = torch.mean(torch.max(y_gt - y, torch.FloatTensor([0]).to(device)))
     _loss = torch.mean(torch.max(0.2 + ysim - ydis, torch.FloatTensor([0]).to(device)))
 
     if torch.isnan(_loss):
         import pdb
-
         pdb.set_trace()
 
     return _loss
@@ -150,7 +149,7 @@ def train_with_boundary(
     loss_val = loss.data.cpu().numpy()
 
     print(
-        f"Iteration: {iteration:6d}, loss_m : {loss_mask.data.cpu().numpy():.4f} "
+        f"Iteration: {iteration:4d}, loss_m : {loss_mask.data.cpu().numpy():.4f} "
         + f"loss_b : {loss_boundary.data.cpu().numpy():.4f} "
         + f"Loss : {loss_val:.4f}"
     )
