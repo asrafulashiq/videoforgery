@@ -34,7 +34,8 @@ if __name__ == "__main__":
     torch.cuda.manual_seed_all(args.seed)
 
     # logger
-    logger = SummaryWriter("./logs/" + args.model + "_" + args.videoset)
+    logger = SummaryWriter("./logs/" + args.model + "_" + args.model_type + "_" +
+                           args.videoset + "_" + args.loss_type)
 
     # dataset
     tsfm = CustomTransform(size=args.size)
