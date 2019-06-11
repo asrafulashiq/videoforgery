@@ -66,11 +66,8 @@ def train_with_src(inputs, labels, model, optimizer, args, iteration, device, lo
             logger.add_scalar("train_loss/total", loss, iteration)
 
 
-
-
-
 def train(inputs, labels, model, optimizer, args, iteration, device, logger=None,
-         validate=False):
+          validate=False):
 
     if validate:
         model.eval()
@@ -102,12 +99,83 @@ def train(inputs, labels, model, optimizer, args, iteration, device, logger=None
     else:
         print(f"Iteration: {iteration:4d} \t\t Loss : {loss_val:.4f}")
 
-
     if logger is not None:
         if validate:
             logger.add_scalar("val_loss/total", loss, iteration)
         else:
             logger.add_scalar("train_loss/total", loss, iteration)
+
+
+
+def train_GAN(inputs, labels, model, optimizer, args, iteration, device, logger=None,
+         validate=False):
+
+    generator, discriminator = model
+
+    valid = torch.tensor(1., dtype=torch.float32).to(device)
+    fake = torch.tensor(0., dtype=torch.float32).to(device)
+
+    if validate:
+        [m.eval() for m in model]
+    else:
+        [m.train() for m in model]
+
+    inputs = inputs.to(device)
+    labels = labels.to(device)
+
+    # prediction
+    y = generator(inputs)
+
+    optimizer_G, optimizer_D = optimizer
+
+    if args.loss_type == "dice":
+        fn_loss = dice_loss
+    else:
+        fn_loss = BCE_loss
+    fn_dis_loss = nn.BCEWithLogitsLoss()
+
+    # Generator
+    pred_fake = discriminator(torch.sigmoid(y), inputs)
+    loss_gen = fn_loss(y, labels, with_weight=False)
+    loss_dis = fn_dis_loss(pred_fake, valid.expand_as(pred_fake))
+
+    loss_G = 0.5 * (loss_gen + args.gamma * loss_dis)
+
+    if not validate:
+        optimizer_G.zero_grad()
+        loss_G.backward()
+        optimizer_G.step()
+
+
+    # Discriminator
+    pred_real = discriminator(labels, inputs)
+    loss_real = fn_dis_loss(pred_real, valid.expand_as(pred_real))
+
+    pred_fake = discriminator(torch.sigmoid(y.detach()), inputs)
+    loss_fake = fn_dis_loss(pred_fake, fake.expand_as(pred_real))
+
+    loss_D = 0.5 * (loss_real + loss_fake)
+
+    if not validate:
+        optimizer_D.zero_grad()
+        loss_D.backward()
+        optimizer_D.step()
+
+
+    if not validate:
+        print(f"Iteration: {iteration:4d} Loss_G : {loss_G.data.cpu().numpy():.4f}" +
+            f" Loss_D : {loss_D.data.cpu().numpy():.4f}")
+    else:
+        print(f"Iteration: {iteration:4d} \t\t Loss_G : {loss_G.data.cpu().numpy():.4f}" +
+              f" Loss_D : {loss_D.data.cpu().numpy():.4f}")
+
+    if logger is not None:
+        if validate:
+            logger.add_scalar("val_loss/loss_G", loss_G, iteration)
+            logger.add_scalar("val_loss/loss_D", loss_D, iteration)
+        else:
+            logger.add_scalar("train_loss/loss_G", loss_G, iteration)
+            logger.add_scalar("train_loss/loss_D", loss_D, iteration)
 
 
 

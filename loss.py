@@ -37,7 +37,7 @@ def dice_loss(y, labels):
     return 1 - (numer + smooth) / (den + smooth)
 
 
-def BCE_loss(y, labels, with_logits=True):
+def BCE_loss(y, labels, with_logits=True, with_weight=True):
     eps = 1e-8
     y = y.contiguous().view(-1)
     labels = labels.view(-1)
@@ -45,6 +45,9 @@ def BCE_loss(y, labels, with_logits=True):
     _w = torch.sum(labels) / (labels.shape[0])
 
     wgt = labels * (1 - _w) + _w * (1 - labels)
+
+    if not with_weight:
+        wgt=None
 
     if with_logits:
         bce_loss = F.binary_cross_entropy_with_logits(y, labels, wgt)

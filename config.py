@@ -30,6 +30,8 @@ def arg_common():
                         help="model type (unet/albunet/deeplab)")
     parser.add_argument("--loss-type", default="bce", type=str,
                         help="loss type (bce / dice / l1)")
+    parser.add_argument("--gamma", type=float, default=1,
+                        help="gamma")
 
     return parser
 
