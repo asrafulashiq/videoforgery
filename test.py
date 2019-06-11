@@ -30,8 +30,7 @@ def test_track(dataset, model, args, iteration, device, num=None, logger=None):
     counter = 0
     Tp, Tn, Fp, Fn = 0, 0, 0, 0
     for cnt, (X_all, Y_all) in tqdm(
-        enumerate(dataset.load_videos_track(is_training=False))
-    ):
+            enumerate(dataset.load_videos_track(is_training=False))):
         # counter = 0
         prev = None
         _len = X_all.shape[0]
@@ -42,7 +41,8 @@ def test_track(dataset, model, args, iteration, device, num=None, logger=None):
             X = X.to(device)
             labels = labels.to(device)
             if i == 0:
-                prev = torch.zeros(labels.shape, dtype=torch.float32).to(device)
+                prev = torch.zeros(labels.shape,
+                                   dtype=torch.float32).to(device)
 
             inp = torch.cat((X, prev), 0)
             preds = model(inp.unsqueeze(0))
@@ -56,8 +56,7 @@ def test_track(dataset, model, args, iteration, device, num=None, logger=None):
             L.extend(_labels.tolist())
 
             tn, fp, fn, tp = metrics.confusion_matrix(
-                _labels, (_preds > args.thres)
-            ).ravel()
+                _labels, (_preds > args.thres)).ravel()
             Tp, Tn, Fp, Fn = Tp + tp, Tn + tn, Fp + fp, Fn + fn
 
         if num is not None and cnt >= num:
@@ -83,8 +82,7 @@ def test_move(dataset, model, args, iteration, device, num=None, logger=None):
     counter = 0
 
     for cnt, (X_all, Y_all) in tqdm(
-        enumerate(dataset.load_videos_track(is_training=False))
-    ):
+            enumerate(dataset.load_videos_track(is_training=False))):
         # counter = 0
         prev = None
         _len = X_all.shape[0]
@@ -95,7 +93,8 @@ def test_move(dataset, model, args, iteration, device, num=None, logger=None):
             X = X.to(device)
             labels = labels.to(device)
             if i == 0:
-                prev = torch.zeros(labels.shape, dtype=torch.float32).to(device)
+                prev = torch.zeros(labels.shape,
+                                   dtype=torch.float32).to(device)
 
             inp = torch.cat((X, prev), 0)
             preds = model(inp.unsqueeze(0))
@@ -129,20 +128,26 @@ def test_move(dataset, model, args, iteration, device, num=None, logger=None):
 
 
 @torch.no_grad()
-def test_track_video(dataset, model, args, iteration, device, num=10, logger=None):
+def test_track_video(dataset,
+                     model,
+                     args,
+                     iteration,
+                     device,
+                     num=10,
+                     logger=None):
 
     for k in range(25):
         path = "./tmp/{}".format(k)
 
         tsfm = CustomTransform(args.size)
-        for i, (image, label) in tqdm(enumerate(dataset.get_frames_from_video())):
+        for i, (image,
+                label) in tqdm(enumerate(dataset.get_frames_from_video())):
             im_tensor = tsfm(image)
             im_tensor = im_tensor.to(device)
 
             if i == 0:
-                prev = torch.zeros((1, args.size, args.size), dtype=im_tensor.dtype).to(
-                    device
-                )
+                prev = torch.zeros((1, args.size, args.size),
+                                   dtype=im_tensor.dtype).to(device)
             X = torch.cat((im_tensor, prev), 0)
 
             output = model(X.unsqueeze(0))
@@ -165,8 +170,7 @@ def test_track_video(dataset, model, args, iteration, device, num=10, logger=Non
 
 
 def test_match_in_the_video(dataset, args, tk=3):
-    """match an image with forged match in the video
-    """
+    """match an image with forged match in the video."""
 
     matcher = utils.TemplateMatch(thres=args.thres)
 
@@ -190,11 +194,8 @@ def test_match_in_the_video(dataset, args, tk=3):
 
         sort_ind = np.argsort(sim_list)[::-1]
         k = np.where(sort_ind == gt_ind)[0][0] + 1
-        print(
-            "{:03d} Target: {:2d}, Matched: {:2d}, topk: {:3d}, GT: {:2d}".format(
-                cnt, first_ind, sort_ind[0], k, gt_ind
-            )
-        )
+        print("{:03d} Target: {:2d}, Matched: {:2d}, topk: {:3d}, GT: {:2d}".
+              format(cnt, first_ind, sort_ind[0], k, gt_ind))
 
         _top.append(k)
 
@@ -213,7 +214,8 @@ def test(dataset, model, args, iteration, device, logger=None, max_iter=None):
 
     Tp, Tn, Fp, Fn = 0, 0, 0, 0
 
-    for X, labels, info in tqdm(dataset.load_data(batch=40, is_training=False)):
+    for X, labels, info in tqdm(dataset.load_data(batch=40,
+                                                  is_training=False)):
         X = X.to(device)
         labels = labels.to(device)
         preds = model(X)
@@ -226,8 +228,7 @@ def test(dataset, model, args, iteration, device, logger=None, max_iter=None):
         labels = (labels > 0.5).astype(np.float32)
 
         tn, fp, fn, tp = metrics.confusion_matrix(
-            labels.ravel(), (preds > args.thres).ravel()
-        ).ravel()
+            labels.ravel(), (preds > args.thres).ravel()).ravel()
         Tp, Tn, Fp, Fn = Tp + tp, Tn + tn, Fp + fp, Fn + fn
 
         counter += X.shape[0]
@@ -245,7 +246,13 @@ def test(dataset, model, args, iteration, device, logger=None, max_iter=None):
 
 
 @torch.no_grad()
-def test_with_src(dataset, model, args, iteration, device, logger=None, max_iter=None):
+def test_with_src(dataset,
+                  model,
+                  args,
+                  iteration,
+                  device,
+                  logger=None,
+                  max_iter=None):
     model.eval()
     counter = 0
 
@@ -253,7 +260,8 @@ def test_with_src(dataset, model, args, iteration, device, logger=None, max_iter
     Tsrc = np.array([0, 0, 0, 0])
     Tback = np.array([0, 0, 0, 0])
 
-    for X, labels, info in tqdm(dataset.load_data_with_src(batch=40, is_training=False)):
+    for X, labels, info in tqdm(
+            dataset.load_data_with_src(batch=40, is_training=False)):
         X = X.to(device)
         labels = labels.to(device)
         preds = model(X)
@@ -263,21 +271,18 @@ def test_with_src(dataset, model, args, iteration, device, logger=None, max_iter
 
         preds = preds.data.cpu().numpy()
         labels = labels.data.cpu().numpy()
-        labels = (labels > 0.5).astype(np.float32)
+        # labels = (labels > 0.5).astype(np.float32)
 
         preds_bool = preds > args.thres
 
-        tforg = metrics.confusion_matrix(
-            labels[:, 0].ravel(), preds_bool[:, 0].ravel()
-        ).ravel()
+        tforg = metrics.confusion_matrix((labels == 2).ravel(),
+                                         preds_bool[:, 2].ravel()).ravel()
 
-        tsrc = metrics.confusion_matrix(
-            labels[:, 1].ravel(), preds_bool[:, 1].ravel()
-        ).ravel()
+        tsrc = metrics.confusion_matrix((labels == 1).ravel(),
+                                        preds_bool[:, 1].ravel()).ravel()
 
-        tback = metrics.confusion_matrix(
-            labels[:, 2].ravel(), preds_bool[:, 2].ravel()
-        ).ravel()
+        tback = metrics.confusion_matrix((labels == 0).ravel(),
+                                         preds_bool[:, 0].ravel()).ravel()
 
         Tforge += tforg
         Tsrc += tsrc
@@ -293,14 +298,14 @@ def test_with_src(dataset, model, args, iteration, device, logger=None, max_iter
     f1_back = utils.fscore(Tback)
     print()
     print("TEST")
-    print(f"F1 score - forge: {f1_forge:.4f}, src: {f1_src:.4f}, back: {f1_back:.4f}")
+    print(
+        f"F1 score - forge: {f1_forge:.4f}, src: {f1_src:.4f}, back: {f1_back:.4f}"
+    )
 
     if logger is not None:
         logger.add_scalar("score/f1_src", f1_src, iteration)
         logger.add_scalar("score/f1_forge", f1_forge, iteration)
         logger.add_scalar("score/f1_back", f1_back, iteration)
-
-
 
 
 def score_report(y_pred, y_gt, args, iteration, logger=None):
@@ -329,7 +334,8 @@ def plot_samples(preds, labels, args, info=None):
         label = labels[i]
         imfile = info[i][0]
         image = skimage.io.imread(imfile)
-        image = skimage.transform.resize(image, (label.shape[0], label.shape[1]))
+        image = skimage.transform.resize(image,
+                                         (label.shape[0], label.shape[1]))
         image = skimage.img_as_float32(image)
 
         # im = utils.overlay_masks(label, pred > args.thres)
@@ -338,4 +344,3 @@ def plot_samples(preds, labels, args, info=None):
 
     pdf.final()
     print(f"{out_file_name} created")
-

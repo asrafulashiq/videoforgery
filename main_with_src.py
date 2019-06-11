@@ -86,12 +86,19 @@ if __name__ == "__main__":
         # init_ep = checkpoint["epoch"]
 
     if args.validate:
-        val_loader = dataset.load_data_with_src(args.batch_size*3, is_training=False,
+        val_loader = dataset.load_data_with_src(args.batch_size * 3,
+                                                is_training=False,
                                                 with_boundary=args.boundary)
 
     # train
     if args.test:  # test mode
-        test_with_src(dataset, model, args, iteration, device, logger, max_iter=200)
+        test_with_src(dataset,
+                      model,
+                      args,
+                      iteration,
+                      device,
+                      logger,
+                      max_iter=200)
     else:  # train
         for ep in tqdm(range(init_ep, args.epoch)):
             # train
@@ -106,13 +113,22 @@ if __name__ == "__main__":
                     try:
                         x_val, y_val, _ = next(val_loader)
                     except StopIteration:
-                        val_loader = dataset.load_data_with_src(args.batch_size, is_training=False,
-                                                                with_boundary=args.boundary)
+                        val_loader = dataset.load_data_with_src(
+                            args.batch_size,
+                            is_training=False,
+                            with_boundary=args.boundary)
                         x_val, y_val, _ = next(val_loader)
 
                     with torch.no_grad():
-                        fn_train(x_batch, y_batch, model, optimizer, args, iteration,
-                                 device, logger, validate=True)
+                        fn_train(x_batch,
+                                 y_batch,
+                                 model,
+                                 optimizer,
+                                 args,
+                                 iteration,
+                                 device,
+                                 logger,
+                                 validate=True)
 
                 iteration += 1
             # save current state
@@ -128,7 +144,11 @@ if __name__ == "__main__":
             scheduler.step()
 
             # test
-            test_with_src(dataset, model, args, iteration,
-                          device, logger, max_iter=500)
-
+            test_with_src(dataset,
+                          model,
+                          args,
+                          iteration,
+                          device,
+                          logger,
+                          max_iter=500)
         logger.close()

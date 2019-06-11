@@ -53,24 +53,21 @@ def BCE_loss(y, labels):
 
     return bce_loss.float()
 
-def CE_loss(y, labels):
 
-    eps = 1e-8
-    n_back = 1/(torch.sum(labels==0)+eps)
-    n_src = 1/(torch.sum(labels==1)+eps)
-    n_forge = 1/(torch.sum(labels==2)+eps)
+def CrossEntropy2d(input, target ):
+    # input:(n, c, h, w) target:(n, h, w)
+    n, c, h, w = input.size()
 
-    n_sum = n_forge + n_src + n_back + eps
+    input = input.transpose(1, 2).transpose(2, 3).contiguous()
+    input = input[target.view(n, h, w, 1).repeat(1, 1, 1, c) >= 0].view(-1, c)
 
-    weight = torch.tensor([n_back, n_src, n_forge]) / n_sum
+    target_mask = target >= 0
+    target = target[target_mask]
 
-    y = y.view(-1, 3)
-    labels = labels.view(-1)
-
-    loss = F.cross_entropy(y, labels, weight)
+    # weight = torch.tensor([0.2, 0.3, 0.5]).cuda()
+    loss = F.cross_entropy(input, target)
 
     return loss
-
 
 
 def Index_loss(ysim, ydis, ind_gt, device):
@@ -125,7 +122,7 @@ def train_with_src(inputs, labels, model, optimizer, args, iteration, device, lo
     # prediction
     y = model(inputs)
 
-    fn_loss = CE_loss
+    fn_loss =  CrossEntropy2d #CE_loss
 
     loss = fn_loss(y, labels)
     loss_val = loss.data.cpu().numpy()
