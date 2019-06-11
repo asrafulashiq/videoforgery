@@ -33,8 +33,9 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
+    args.loss_type=""
     # model name
-    model_name = args.model + "_" + args.model_type + "_" + \
+    model_name = "three_" + args.model + "_" + args.model_type + "_" + \
         args.videoset + "_" + args.loss_type
 
     if args.boundary:

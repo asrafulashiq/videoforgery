@@ -294,12 +294,15 @@ def test_with_src(dataset,
             break
 
     f1_src = utils.fscore(Tsrc)
+    recall_src = Tsrc[3] / (Tsrc[3] + Tsrc[2])
+
     f1_forge = utils.fscore(Tforge)
     f1_back = utils.fscore(Tback)
     print()
     print("TEST")
     print(
         f"F1 score - forge: {f1_forge:.4f}, src: {f1_src:.4f}, back: {f1_back:.4f}"
+        + f" Recall: src: {recall_src:.4f}"
     )
 
     if logger is not None:

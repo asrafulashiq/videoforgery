@@ -4,86 +4,8 @@ import numpy as np
 import torch.nn.functional as F
 from torch.autograd import Variable
 
+from loss import *
 
-def focal_loss(x, t, gamma=2):
-    '''Focal loss.
-    Args:
-        x: (tensor) sized [N,1, ...].
-        y: (tensor) sized [N, 1, ...].
-    Return:
-        (tensor) focal loss.
-    '''
-
-    x = x.view(-1)
-    t = t.view(-1)
-
-    wgt = torch.sum(t) / (t.shape[0])
-
-    p = torch.sigmoid(x)
-    pt = p*t + (1-p)*(1-t)         # pt = p if t > 0 else 1-p
-    w = (1-wgt)*t + wgt*(1-t)  # w = alpha if t > 0 else 1-alpha
-    w = w * (1-pt).pow(gamma)
-    return F.binary_cross_entropy_with_logits(x, t, w.detach())
-
-def dice_loss(y, labels):
-    smooth = 1
-    y = torch.sigmoid(y.view(-1))
-    lab = labels.view(-1)
-
-    numer = 2 * (y * lab).sum()
-    den = y.sum() + lab.sum()
-
-    return 1 - (numer + smooth) / (den + smooth)
-
-def BCE_loss(y, labels):
-    eps = 1e-8
-    y = y.view(-1)
-    labels = labels.view(-1)
-
-    _w = torch.sum(labels) / (labels.shape[0])
-
-    wgt = labels * (1 - _w) + _w * (1 - labels)
-
-    bce_loss = F.binary_cross_entropy_with_logits(y, labels, wgt)
-
-
-    if torch.isnan(bce_loss) or bce_loss < 0:
-        import pdb
-        pdb.set_trace()
-
-    return bce_loss.float()
-
-
-def CrossEntropy2d(input, target ):
-    # input:(n, c, h, w) target:(n, h, w)
-    n, c, h, w = input.size()
-
-    input = input.transpose(1, 2).transpose(2, 3).contiguous()
-    input = input[target.view(n, h, w, 1).repeat(1, 1, 1, c) >= 0].view(-1, c)
-
-    target_mask = target >= 0
-    target = target[target_mask]
-
-    # weight = torch.tensor([0.2, 0.3, 0.5]).cuda()
-    loss = F.cross_entropy(input, target)
-
-    return loss
-
-
-def Index_loss(ysim, ydis, ind_gt, device):
-    ysim = torch.pow(torch.sigmoid(ysim.squeeze()), 2)
-    ydis = torch.pow(torch.sigmoid(ydis.squeeze()), 2)
-    ind_gt = ind_gt.squeeze()
-
-    y_gt = torch.abs(ind_gt[:, 0] - ind_gt[:, 1])
-    # l1_loss = torch.mean(torch.max(y_gt - y, torch.FloatTensor([0]).to(device)))
-    _loss = torch.mean(torch.max(0.2 + ysim - ydis, torch.FloatTensor([0]).to(device)))
-
-    if torch.isnan(_loss):
-        import pdb
-        pdb.set_trace()
-
-    return _loss
 
 
 def train_match_in_the_video(
@@ -122,9 +44,10 @@ def train_with_src(inputs, labels, model, optimizer, args, iteration, device, lo
     # prediction
     y = model(inputs)
 
-    fn_loss =  CrossEntropy2d #CE_loss
+    fn_loss =  Two_loss
 
     loss = fn_loss(y, labels)
+
     loss_val = loss.data.cpu().numpy()
 
     if not validate:
