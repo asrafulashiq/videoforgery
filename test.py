@@ -249,7 +249,9 @@ def test_with_src(dataset, model, args, iteration, device, logger=None, max_iter
     model.eval()
     counter = 0
 
-    Tp, Tn, Fp, Fn = 0, 0, 0, 0
+    Tforge = np.array([0, 0, 0, 0])
+    Tsrc = np.array([0, 0, 0, 0])
+    Tback = np.array([0, 0, 0, 0])
 
     for X, labels, info in tqdm(dataset.load_data_with_src(batch=40, is_training=False)):
         X = X.to(device)
@@ -259,27 +261,44 @@ def test_with_src(dataset, model, args, iteration, device, logger=None, max_iter
             preds = preds[0]
         preds = torch.sigmoid(preds)
 
-        preds = preds.squeeze().data.cpu().numpy()
-        labels = labels.squeeze().data.cpu().numpy()
+        preds = preds.data.cpu().numpy()
+        labels = labels.data.cpu().numpy()
         labels = (labels > 0.5).astype(np.float32)
 
-        tn, fp, fn, tp = metrics.confusion_matrix(
-            labels.ravel(), (preds > args.thres).ravel()
+        preds_bool = preds > args.thres
+
+        tforg = metrics.confusion_matrix(
+            labels[:, 0].ravel(), preds_bool[:, 0].ravel()
         ).ravel()
-        Tp, Tn, Fp, Fn = Tp + tp, Tn + tn, Fp + fp, Fn + fn
+
+        tsrc = metrics.confusion_matrix(
+            labels[:, 1].ravel(), preds_bool[:, 1].ravel()
+        ).ravel()
+
+        tback = metrics.confusion_matrix(
+            labels[:, 2].ravel(), preds_bool[:, 2].ravel()
+        ).ravel()
+
+        Tforge += tforg
+        Tsrc += tsrc
+        Tback += tback
 
         counter += X.shape[0]
 
         if max_iter is not None and counter > max_iter:
             break
 
-    f1_mean = 2. * Tp / (2 * Tp + Fp + Fn)
+    f1_src = utils.fscore(Tsrc)
+    f1_forge = utils.fscore(Tforge)
+    f1_back = utils.fscore(Tback)
     print()
     print("TEST")
-    print(f"F1 Score: {f1_mean:.4f}")
+    print(f"F1 score - forge: {f1_forge:.4f}, src: {f1_src:.4f}, back: {f1_back:.4f}")
 
     if logger is not None:
-        logger.add_scalar("score/f1", f1_mean, iteration)
+        logger.add_scalar("score/f1_src", f1_src, iteration)
+        logger.add_scalar("score/f1_forge", f1_forge, iteration)
+        logger.add_scalar("score/f1_back", f1_back, iteration)
 
 
 

@@ -37,22 +37,40 @@ def dice_loss(y, labels):
 
 def BCE_loss(y, labels):
     eps = 1e-8
-    y = y.squeeze().double()
-    labels = labels.squeeze().double()
+    y = y.view(-1)
+    labels = labels.view(-1)
 
-    wgt = torch.sum(labels) / (labels.shape[0] * labels.shape[1] * labels.shape[2])
+    _w = torch.sum(labels) / (labels.shape[0])
 
-    bce_loss = -(1 - wgt) * labels * F.logsigmoid(y) - wgt * (1 - labels) * torch.log(
-        1 - torch.sigmoid(y) + eps
-    )
-    bce_loss = torch.mean(bce_loss)
+    wgt = labels * (1 - _w) + _w * (1 - labels)
+
+    bce_loss = F.binary_cross_entropy_with_logits(y, labels, wgt)
+
 
     if torch.isnan(bce_loss) or bce_loss < 0:
         import pdb
-
         pdb.set_trace()
 
     return bce_loss.float()
+
+def CE_loss(y, labels):
+
+    eps = 1e-8
+    n_back = 1/(torch.sum(labels==0)+eps)
+    n_src = 1/(torch.sum(labels==1)+eps)
+    n_forge = 1/(torch.sum(labels==2)+eps)
+
+    n_sum = n_forge + n_src + n_back + eps
+
+    weight = torch.tensor([n_back, n_src, n_forge]) / n_sum
+
+    y = y.view(-1, 3)
+    labels = labels.view(-1)
+
+    loss = F.cross_entropy(y, labels, weight)
+
+    return loss
+
 
 
 def Index_loss(ysim, ydis, ind_gt, device):
@@ -91,6 +109,44 @@ def train_match_in_the_video(
 
     if logger is not None:
         logger.add_scalar("loss/loss_ind", loss, iteration)
+
+
+def train_with_src(inputs, labels, model, optimizer, args, iteration, device, logger=None,
+          validate=False):
+
+    if validate:
+        model.eval()
+    else:
+        model.train()
+
+    inputs = inputs.to(device)
+    labels = labels.to(device)
+
+    # prediction
+    y = model(inputs)
+
+    fn_loss = CE_loss
+
+    loss = fn_loss(y, labels)
+    loss_val = loss.data.cpu().numpy()
+
+    if not validate:
+        optimizer.zero_grad()
+        loss.backward()
+        # nn.utils.clip_grad_norm_(model.parameters(), args.clip)
+        optimizer.step()
+        print(f"Iteration: {iteration:4d} Loss : {loss_val:.4f}")
+    else:
+        print(f"Iteration: {iteration:4d} \t\t Loss : {loss_val:.4f}")
+
+    if logger is not None:
+        if validate:
+            logger.add_scalar("val_loss/total", loss, iteration)
+        else:
+            logger.add_scalar("train_loss/total", loss, iteration)
+
+
+
 
 
 def train(inputs, labels, model, optimizer, args, iteration, device, logger=None,

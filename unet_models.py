@@ -135,7 +135,8 @@ class UNet11_two_branch_out(nn.Module):
 
 
 class UNet11(nn.Module):
-    def __init__(self, num_filters=32, pretrained=False, mod=False, mod_chan=4):
+    def __init__(self, num_filters=32, pretrained=False, num_classes=1,
+                 mod=False, mod_chan=4):
         """
         :param num_classes:
         :param num_filters:
@@ -184,7 +185,7 @@ class UNet11(nn.Module):
         )
         self.dec1 = ConvRelu(num_filters * (2 + 1), num_filters)
 
-        self.final = nn.Conv2d(num_filters, 1, kernel_size=1)
+        self.final = nn.Conv2d(num_filters, num_classes, kernel_size=1)
 
     def forward(self, x):
         conv1 = self.relu(self.conv1(x))

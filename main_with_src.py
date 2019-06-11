@@ -12,8 +12,8 @@ from models import Model, Model_boundary
 import config
 from dataset import Dataset_image
 from utils import CustomTransform
-from train import train, train_with_boundary
-from test import test
+from train import train, train_with_boundary, train_with_src
+from test import test, test_with_src
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
     # model name
     model_name = args.model + "_" + args.model_type + "_" + \
-                args.videoset + "_" + args.loss_type
+        args.videoset + "_" + args.loss_type
 
     if args.boundary:
         model_name += "_boundary"
@@ -54,12 +54,9 @@ if __name__ == "__main__":
         dataset = Dataset_image(args=args, transform=tsfm)
 
     # model
-    if args.boundary:
-        model = Model_boundary()
-        fn_train = train_with_boundary
-    else:
-        fn_train = train
-        model = Model(type=args.model_type)
+    fn_train = train_with_src
+
+    model = Model(type=args.model_type, num_classes=3)
 
     model = model.to(device)
 
@@ -90,11 +87,11 @@ if __name__ == "__main__":
 
     if args.validate:
         val_loader = dataset.load_data_with_src(args.batch_size*3, is_training=False,
-                                       with_boundary=args.boundary)
+                                                with_boundary=args.boundary)
 
     # train
     if args.test:  # test mode
-        test(dataset, model, args, iteration, device, logger)
+        test_with_src(dataset, model, args, iteration, device, logger, max_iter=200)
     else:  # train
         for ep in tqdm(range(init_ep, args.epoch)):
             # train
@@ -110,7 +107,7 @@ if __name__ == "__main__":
                         x_val, y_val, _ = next(val_loader)
                     except StopIteration:
                         val_loader = dataset.load_data_with_src(args.batch_size, is_training=False,
-                                                       with_boundary=args.boundary)
+                                                                with_boundary=args.boundary)
                         x_val, y_val, _ = next(val_loader)
 
                     with torch.no_grad():
@@ -131,6 +128,7 @@ if __name__ == "__main__":
             scheduler.step()
 
             # test
-            test(dataset, model, args, iteration, device, logger, max_iter=500)
+            test_with_src(dataset, model, args, iteration,
+                          device, logger, max_iter=500)
 
         logger.close()

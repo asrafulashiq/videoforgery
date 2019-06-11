@@ -274,14 +274,14 @@ class Dataset_image:
         counter = 0
         X = torch.zeros((batch, 3, self.args.size,
                          self.args.size), dtype=torch.float32)
-        ysize=3
+        ysize=1
         Y = torch.zeros((batch, ysize, self.args.size,
-                         self.args.size), dtype=torch.float32)
+                         self.args.size), dtype=torch.long)
 
         Info = []
 
         if shuffle:
-            np.random.shuffle(self.__im_files_with_gt)
+            np.random.shuffle(self.__im_file_with_src_copy)
 
         for i, im_file, mask_file, src_file in self.__im_file_with_src_copy:
             if (is_training and i in self.train_index) or (
@@ -290,9 +290,7 @@ class Dataset_image:
                 tmp = self.__get_im(im_file, mask_file, with_src=True,
                                     src_file=src_file)
                 X[counter] = tmp[0]
-                Y[counter, 0] = tmp[1]
-                Y[counter, 1] = tmp[2]
-                Y[counter, 2] = tmp[3]
+                Y[counter] = tmp[1]
                 Info.append((im_file, mask_file, src_file))
                 counter += 1
                 if counter % batch == 0:
@@ -311,7 +309,7 @@ class Dataset_image:
                     )
                     Y = torch.zeros(
                         (batch, ysize, self.args.size,
-                         self.args.size), dtype=torch.float32
+                         self.args.size), dtype=torch.long
                     )
                     Info = []
                     counter = 0
@@ -395,6 +393,8 @@ class Dataset_image:
             mask_back = np.zeros(mask.shape[:2], dtype=np.float32)
             mask_back[(mask==0) & (mask_src==0)] = 1
 
+
+
         if do_transform and self.transform is not None:
             image, mask = self.transform(image, mask)
 
@@ -406,7 +406,10 @@ class Dataset_image:
         if with_boundary:
             return image, mask, boundary
         elif with_src:
-            return image, mask, mask_src, mask_back
+            mask_all = torch.zeros(mask.shape, dtype=torch.long)
+            mask_all[mask > 0] = 2
+            mask_all[mask_src>0] = 1
+            return image, mask_all
         else:
             return image, mask
 

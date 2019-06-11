@@ -9,22 +9,22 @@ from modeling import deeplab
 
 
 
-def get_model(type, pretrained=True):
+def get_model(type, pretrained=True, num_classes=1):
     if type == "unet":
-        model = UNet11(pretrained=pretrained)
+        model = UNet11(pretrained=pretrained, num_classes=num_classes)
     elif type == "albunet":
-        model = AlbuNet(pretrained=pretrained)
+        model = AlbuNet(pretrained=pretrained, num_classes=num_classes)
     elif type == "deeplab":
-        model = deeplab.DeepLab(num_classes=1, backbone='xception')
+        model = deeplab.DeepLab(num_classes=num_classes, backbone='xception')
     else:
         raise Exception("Wrong model")
     return model
 
 
 class Model(nn.Module):
-    def __init__(self, pretrained=True, type="unet"):
+    def __init__(self, pretrained=True, type="unet", num_classes=1):
         super().__init__()
-        self.base = get_model(type, pretrained)
+        self.base = get_model(type, pretrained, num_classes)
 
     def forward(self, x):
         x = self.base(x)
