@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 
-def focal_loss(x, t, gamma=2):
+def focal_loss(x, t, gamma=2, with_weight=False):
     '''Focal loss.
     Args:
         x: (tensor) sized [N,1, ...].
@@ -16,8 +16,11 @@ def focal_loss(x, t, gamma=2):
 
     x = x.view(-1)
     t = t.view(-1)
-
-    wgt = torch.sum(t) / (t.shape[0])
+    
+    if with_weight:
+        wgt = torch.sum(t) / (t.shape[0])
+    else:
+        wgt = 0.5
 
     p = torch.sigmoid(x)
     pt = p*t + (1-p)*(1-t)         # pt = p if t > 0 else 1-p
@@ -37,17 +40,18 @@ def dice_loss(y, labels):
     return 1 - (numer + smooth) / (den + smooth)
 
 
-def BCE_loss(y, labels, with_logits=True, with_weight=True):
+def BCE_loss(y, labels, with_logits=True, with_weight=False):
     eps = 1e-8
     y = y.contiguous().view(-1)
     labels = labels.view(-1)
 
     _w = torch.sum(labels) / (labels.shape[0])
 
-    wgt = labels * (1 - _w) + _w * (1 - labels)
 
     if not with_weight:
         wgt=None
+    else:
+        wgt = labels * (1 - _w) + _w * (1 - labels)
 
     if with_logits:
         bce_loss = F.binary_cross_entropy_with_logits(y, labels, wgt)
