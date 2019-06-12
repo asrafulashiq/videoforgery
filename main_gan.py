@@ -86,6 +86,15 @@ if __name__ == "__main__":
 
     iteration = 1
     init_ep = 0
+
+    # load coco pretrained on generator
+    coco_pre_file = 'backup/base_unet_coco_bce.pkl'
+    if os.path.exists(coco_pre_file):
+        model_G.load_state_dict(
+            torch.load(coco_pre_file)['model_state']
+        )
+        print("coco pretrained loaded in generator")
+
     # load if pretrained model
     if args.ckpt is not None:
         checkpoint = torch.load(args.ckpt)
