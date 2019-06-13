@@ -6,7 +6,7 @@ from torchvision import transforms
 from torchvision import models
 import numpy as np
 from modeling import deeplab
-from unet.unet_model import UNet
+# from unet.unet_model import UNet
 
 
 def weights_init_normal(m):

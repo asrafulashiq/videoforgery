@@ -87,16 +87,16 @@ if __name__ == "__main__":
     iteration = 1
     init_ep = 0
 
-    try:
-        # load coco pretrained on generator
-        coco_pre_file = 'backup/base_unet_coco_bce.pkl'
-        if os.path.exists(coco_pre_file):
-            model_G.load_state_dict(
-                torch.load(coco_pre_file)['model_state']
-            )
-            print("coco pretrained loaded in generator")
-    except:
-        pass
+    # try:
+    #     # load coco pretrained on generator
+    #     coco_pre_file = 'backup/base_unet_coco_bce.pkl'
+    #     if os.path.exists(coco_pre_file):
+    #         model_G.load_state_dict(
+    #             torch.load(coco_pre_file)['model_state']
+    #         )
+    #         print("coco pretrained loaded in generator")
+    # except:
+    #     pass
 
     # load if pretrained model
     if args.ckpt is not None:
