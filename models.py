@@ -6,6 +6,7 @@ from torchvision import transforms
 from torchvision import models
 import numpy as np
 from modeling import deeplab
+from unet.unet_model import UNet
 
 
 def weights_init_normal(m):
@@ -24,6 +25,8 @@ def get_model(type, pretrained=True, num_classes=1):
         model = AlbuNet(pretrained=pretrained, num_classes=num_classes)
     elif type == "deeplab":
         model = deeplab.DeepLab(num_classes=num_classes, backbone='xception')
+    elif type == "unet-basic":
+        model = UNet11(pretrained=pretrained, num_classes=num_classes)
     else:
         raise Exception("Wrong model")
     return model
