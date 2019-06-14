@@ -195,8 +195,8 @@ class Dataset_image:
                     mask_orig = np.zeros(
                         (self.args.size, self.args.size), dtype=np.float32)
                 Y_forge[i] = (cv2.resize(
-                    mask_new, (self.args.size, self.args.size)) > 0.5)
-                Y_orig[i-offset] = (cv2.resize(mask_orig,
+                    mask_new.astype(np.float32), (self.args.size, self.args.size)) > 0.5)
+                Y_orig[i-offset] = (cv2.resize(mask_orig.astype(np.float32),
                                                (self.args.size, self.args.size)) > 0.5)
 
             if forge_time is not None and forge_time[1] == -1:

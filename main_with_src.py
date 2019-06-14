@@ -1,3 +1,5 @@
+"""detection of both copy and move into single image file
+"""
 import os
 import numpy as np
 import torch

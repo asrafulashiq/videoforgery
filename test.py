@@ -71,6 +71,36 @@ def test_track(dataset, model, args, iteration, device, num=None, logger=None):
 
 
 @torch.no_grad()
+def test_CMFD(dataset, args, root, num=None, logger=None):
+    from scipy.io import loadmat
+
+    Tscore = np.zeros(4)
+
+    for cnt, ret in enumerate(tqdm(dataset.load_videos_all())):
+        X, Y_forge, forge_time, Y_orig, gt_time, name = ret
+
+        matfile = os.path.join(
+            root, name+".mat"
+        )
+        assert os.path.exists(matfile)
+        predY = loadmat(matfile)['map']
+        predY = predY.transpose((2, 0, 1))
+
+        for i in range(X.shape[0]):
+            pred_o = predY[i]
+            labels  = (Y_forge[i] > 0) & (Y_orig[i] > 0)
+            pred = skimage.transform.resize(pred_o, labels.shape[:2])
+
+            tt = metrics.confusion_matrix(
+                labels.ravel(), (pred > args.thres).ravel()).ravel()
+            Tscore += np.array(tt)
+
+    f1_mean = utils.fscore(Tscore)
+    print()
+    print("TEST")
+    print(f"F1 Score: {f1_mean:.4f}")
+
+@torch.no_grad()
 def test_move(dataset, model, args, iteration, device, num=None, logger=None):
     model.eval()
 
@@ -212,7 +242,7 @@ def test(dataset, model, args, iteration, device, logger=None, max_iter=None):
     model.eval()
     counter = 0
 
-    Tp, Tn, Fp, Fn = 0, 0, 0, 0
+    Tscore = np.zeros(4)
 
     for X, labels, info in tqdm(dataset.load_data(batch=40,
                                                   is_training=False)):
@@ -227,16 +257,15 @@ def test(dataset, model, args, iteration, device, logger=None, max_iter=None):
         labels = labels.squeeze().data.cpu().numpy()
         labels = (labels > 0.5).astype(np.float32)
 
-        tn, fp, fn, tp = metrics.confusion_matrix(
+        tt = metrics.confusion_matrix(
             labels.ravel(), (preds > args.thres).ravel()).ravel()
-        Tp, Tn, Fp, Fn = Tp + tp, Tn + tn, Fp + fp, Fn + fn
-
+        Tscore += np.array(tt)
         counter += X.shape[0]
 
         if max_iter is not None and counter > max_iter:
             break
 
-    f1_mean = 2. * Tp / (2 * Tp + Fp + Fn)
+    f1_mean = utils.fscore(Tscore)
     print()
     print("TEST")
     print(f"F1 Score: {f1_mean:.4f}")

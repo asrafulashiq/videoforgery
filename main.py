@@ -1,3 +1,5 @@
+"""main file for image forgery detection
+"""
 import os
 import numpy as np
 import torch

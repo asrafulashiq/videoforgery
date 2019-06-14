@@ -1,3 +1,5 @@
+"""forgery detection based on tracking information
+"""
 import os
 import numpy as np
 import torch
@@ -41,7 +43,7 @@ if __name__ == "__main__":
     model = Model().to(device)
 
     # optimizer
-    optimizer = torch.optim.Adam(
+    optimizer = torcmatch_in_the_videoh.optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()),
         lr=args.lr)
     iteration = 0
