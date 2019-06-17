@@ -28,7 +28,7 @@ def test_track(dataset, model, args, iteration, device, num=None, logger=None):
     model.eval()
 
     counter = 0
-    Tp, Tn, Fp, Fn = 0, 0, 0, 0
+    Tscore = np.zeros(4)
     for cnt, (X_all, Y_all) in tqdm(
             enumerate(dataset.load_videos_track(is_training=False))):
         # counter = 0
@@ -55,14 +55,14 @@ def test_track(dataset, model, args, iteration, device, num=None, logger=None):
             P.extend(_preds.tolist())
             L.extend(_labels.tolist())
 
-            tn, fp, fn, tp = metrics.confusion_matrix(
+            tt = metrics.confusion_matrix(
                 _labels, (_preds > args.thres)).ravel()
-            Tp, Tn, Fp, Fn = Tp + tp, Tn + tn, Fp + fp, Fn + fn
+            Tscore += np.array(tt)
 
         if num is not None and cnt >= num:
             break
 
-    f1_mean = 2 * Tp / (2 * Tp + Fp + Fn)
+    f1_mean = utils.fscore(Tscore)
     print("TEST")
     print(f"F1 Score: {f1_mean:.4f}")
 
@@ -76,6 +76,7 @@ def test_CMFD(dataset, args, root, num=None, logger=None):
 
     Tscore = np.zeros(4)
 
+
     for cnt, ret in enumerate(tqdm(dataset.load_videos_all())):
         X, Y_forge, forge_time, Y_orig, gt_time, name = ret
 
@@ -86,9 +87,9 @@ def test_CMFD(dataset, args, root, num=None, logger=None):
         predY = loadmat(matfile)['map']
         predY = predY.transpose((2, 0, 1))
 
-        for i in range(X.shape[0]):
+        for i in range(Y_forge.shape[0]):
             pred_o = predY[i]
-            labels  = (Y_forge[i] > 0) & (Y_orig[i] > 0)
+            labels = (Y_forge[i] > 0) & (Y_orig[i] > 0)
             pred = skimage.transform.resize(pred_o, labels.shape[:2])
 
             tt = metrics.confusion_matrix(
@@ -99,62 +100,6 @@ def test_CMFD(dataset, args, root, num=None, logger=None):
     print()
     print("TEST")
     print(f"F1 Score: {f1_mean:.4f}")
-
-@torch.no_grad()
-def test_move(dataset, model, args, iteration, device, num=None, logger=None):
-    model.eval()
-
-    aucs = []
-    f1s = []
-    P = []
-    L = []
-
-    counter = 0
-
-    for cnt, (X_all, Y_all) in tqdm(
-            enumerate(dataset.load_videos_track(is_training=False))):
-        # counter = 0
-        prev = None
-        _len = X_all.shape[0]
-        for i in range(_len):
-            X = X_all[i, :3]
-            labels = Y_all[i]
-
-            X = X.to(device)
-            labels = labels.to(device)
-            if i == 0:
-                prev = torch.zeros(labels.shape,
-                                   dtype=torch.float32).to(device)
-
-            inp = torch.cat((X, prev), 0)
-            preds = model(inp.unsqueeze(0))
-            preds = torch.sigmoid(preds)
-            prev = preds.squeeze(0)
-
-            _preds = preds.squeeze().data.cpu().numpy().flatten()
-            _labels = labels.squeeze().data.cpu().numpy().flatten()
-            _labels = (_labels > 0.5).astype(np.float32)
-            P.extend(_preds.tolist())
-            L.extend(_labels.tolist())
-
-        if num is not None and cnt >= num:
-            break
-
-    if len(P) > 5 * 4e5:
-        _auc, _f1 = score_report(P, L, args, iteration)
-        aucs.append(_auc)
-        f1s.append(_f1)
-
-    auc_mean = np.mean(aucs)
-    f1_mean = np.mean(f1s)
-
-    print("TEST")
-    print(f"AUC_ROC: {auc_mean: .4f}")
-    print(f"F1 Score: {f1_mean:.4f}")
-
-    if logger is not None:
-        logger.add_scalar("score/f1", f1_mean, iteration)
-        logger.add_scalar("score/auc_roc", auc_mean, iteration)
 
 
 @torch.no_grad()
