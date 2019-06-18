@@ -90,7 +90,7 @@ if __name__ == "__main__":
     # train
     if args.test:  # test mode
         test_track(dataset, model, args, iteration,
-                   device, logger)
+                   device, logger=logger)
     else:  # train
         for ep in tqdm(range(init_ep, args.epoch)):
             # train
@@ -125,7 +125,7 @@ if __name__ == "__main__":
                 "./ckpt/" + model_name + ".pkl",
             )
 
-            scheduler.step()
+            # scheduler.step()
 
             # test
             test_track(dataset, model, args, iteration,

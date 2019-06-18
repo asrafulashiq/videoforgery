@@ -5,6 +5,12 @@ from torchvision import models
 import torchvision
 
 
+def init_weights(module):
+    classname = module.__class__.__name__
+    if classname.find('Linear') != -1 or classname.find("Conv2d") != -1:
+        nn.init.xavier_uniform_(module.weight)
+        module.bias.data.fill_(0.0)
+
 def conv3x3(in_, out, kernel=3):
     return nn.Conv2d(in_, out, kernel, padding=kernel//2)
 
@@ -14,6 +20,8 @@ class ConvRelu(nn.Module):
         super().__init__()
         self.conv = conv3x3(in_, out, kernel=kernel)
         self.activation = nn.ReLU(inplace=True)
+
+        self.apply(init_weights)
 
     def forward(self, x):
         x = self.conv(x)
@@ -37,6 +45,8 @@ class DecoderBlock(nn.Module):
             ),
             nn.ReLU(inplace=True),
         )
+
+        self.apply(init_weights)
 
     def forward(self, x):
         return self.block(x)
@@ -102,6 +112,8 @@ class Decoder(nn.Module):
         self.dec1 = ConvRelu(num_filters * (2 + 1), num_filters)
         self.final = nn.Conv2d(num_filters, num_classes, kernel_size=1)
 
+        self.final.apply(init_weights)
+
     def forward(self, x, convs):
 
         conv1, conv2, conv3, conv4, conv5 = convs
@@ -128,45 +140,67 @@ class Center(nn.Module):
 
 
 class TemporalBlock(nn.Module):
-    def __init__(self, in_channel, span_kernel=4):
+    def __init__(self, in_channel, span_kernel=2):
         super().__init__()
-        self.reduce = span_kernel
-        self.conv = ConvRelu(in_channel*span_kernel, in_channel*span_kernel,
+        self.span_kernel = span_kernel
+        self.conv = ConvRelu(in_channel*2, in_channel,
                              kernel=3)
+        self.stack = Stack()
 
     def forward(self, x):
         # x: L, C, H, W
-        L, C, H, W = x.shape
-        x = x.view(-1, C*self.reduce, H, W)
+        # L, C, H, W = x.shape
+        x = self.stack(x, n_stack=self.span_kernel-1)
         x = self.conv(x)
-
-        x = x.view(L, C, H, W)
         return x
+
+class TemporalNet(nn.Module):
+    def __init__(self, in_channel, level=1):
+        super().__init__()
+        layers = []
+        for i in range(level):
+            span_len = 2**(i+1)
+            layers.append(
+                TemporalBlock(in_channel, span_len)
+            )
+        self.network = nn.Sequential(*layers)
+    
+    def forward(self, x):
+        return self.network(x)
+
+class Stack(nn.Module):
+    def __init__(self, n_stack=1):
+        super().__init__()
+
+    def forward(self, x, n_stack=1):
+        # x : L, C, H, W
+        x_pad = F.pad(x, (0,0, 0,0, 0,0, n_stack, 0), mode='constant', value=0)
+        # new shape: (L+ns), C, H, W
+        x_stack = torch.cat((x_pad[0:-n_stack], x_pad[n_stack:]), dim=1)
+        return x_stack
 
 
 class TCN(nn.Module):
-    def __init__(self, span_len=4, num_filters=32, pretrained=True):
+    def __init__(self, span_len=2, num_filters=32, pretrained=True):
         super().__init__()
         self.encoder = Encoder(pretrained)
-        self.center_reduce = ConvRelu(num_filters*16, num_filters*16//span_len,
-                                      kernel=1)
-        self.temp = TemporalBlock(num_filters*16//span_len, span_len)
-        self.center_expand = ConvRelu(num_filters*16//span_len,
+        self.center_reduce = ConvRelu(num_filters*16, 64, kernel=1)
+        self.temp = TemporalNet(64, level=1)
+        self.center_expand = ConvRelu(64,
                                       num_filters*16,
                                       kernel=1)
 
         self.decoder = Decoder(num_filters=num_filters, num_classes=1)
 
-
     def forward(self, x):
         # x: L, 3, H, W
-        x_encoder_convs = self.encoder(x)  # out last: L, 512, 7, 7
+        x_encoder_convs = self.encoder(x)  # out last: L, 256, 14, 14
         conv5 = x_encoder_convs[-1]
 
-        # x_center = self.center_reduce(conv5)  # out: L, 128, 7, 7
-        # center_tcn = self.temp(x_center)  # out: L, 128, 7, 7
-        # x_expand = self.center_expand(center_tcn)  # out: L, 512, 7, 7
-        x_expand = conv5
+        x_center = self.center_reduce(conv5)  # out: L, 64, 14, 14
+        center_tcn = self.temp(x_center)  # out: L, 64, 14, 14
+        x_expand = self.center_expand(center_tcn)  # out: L, 256, 14, 14
+        # x_expand = conv5
 
         out = self.decoder(x_expand, x_encoder_convs)
 

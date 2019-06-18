@@ -40,7 +40,7 @@ def dice_loss(y, labels):
     return 1 - (numer + smooth) / (den + smooth)
 
 
-def BCE_loss(y, labels, with_logits=True, with_weight=False):
+def BCE_loss(y, labels, with_weight=False, with_logits=True):
     eps = 1e-8
     y = y.contiguous().view(-1)
     labels = labels.view(-1)

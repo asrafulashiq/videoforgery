@@ -24,19 +24,31 @@ warnings.filterwarnings("ignore")
 
 
 @torch.no_grad()
-def test_track(dataset, model, args, iteration, device, num=None, logger=None):
+def test_track(dataset, model, args, iteration, device, logger=None, num=None):
     model.eval()
 
-    counter = 0
     Tscore = np.zeros(4)
     for cnt, (X_all, Y_all) in tqdm(
             enumerate(dataset.load_videos_track(is_training=False, add_prev=False))):
 
-        X_all = X_all.to(device)
+        inputs = X_all.to(device)
         labels = Y_all
 
-        preds = model(X_all)
+        init = 0
+        if inputs.shape[0] % 4 != 0:
+            init = int(np.ceil(inputs.shape[0] /
+                            args.sep) * args.sep - inputs.shape[0])
+            # l, c, h, w = inputs.shape
+            inputs = F.pad(inputs, (0, 0, 0, 0, 0, 0, init, 0), 'constant', 0)
+            labels = F.pad(labels, (0, 0, 0, 0, 0, 0, init, 0), 'constant', 0)
+
+
+        preds = model(inputs)
         preds = torch.sigmoid(preds)
+
+        inputs = inputs[init:]
+        preds = preds[init:]
+        labels = labels[init:]
 
         f_preds = preds.squeeze().data.cpu().numpy().flatten()
         f_labels = labels.squeeze().data.cpu().numpy().flatten()

@@ -53,7 +53,8 @@ class Model_boundary(nn.Module):
 
 
 def init_weights(module):
-    if type(module) == nn.Linear:
+    classname = module.__class__.__name__
+    if classname.find('Linear') != -1 or classname.find("Conv") != -1:
         nn.init.xavier_uniform_(module.weight)
         module.bias.data.fill_(0.0)
 
@@ -80,7 +81,7 @@ class Discriminator(nn.Module):
             nn.Conv2d(512, 1, 4, padding=1, bias=False)
         )
 
-        self.apply(weights_init_normal)
+        self.apply(init_weights)
 
     def forward(self, img_A, img_B):
         # Concatenate image and condition image by channels to produce input
