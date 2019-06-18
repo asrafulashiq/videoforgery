@@ -131,7 +131,9 @@ def arg_main_tcn():
     parser.add_argument("--batch-size", "-b", type=int,
                         default=20, help="batch size")
     parser.add_argument("--thres", type=float, default=0.5,
-                        help="threshold for detection")
+                        help="threshold for detection")\
+
+    parser.add_argument("--level", type=int, default=2, help="level of tcn")
 
     args = parser.parse_args()
     return args

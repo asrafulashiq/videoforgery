@@ -54,7 +54,7 @@ if __name__ == "__main__":
         dataset = Dataset_image(args=args, transform=tsfm)
 
     # model
-    model = TCN()
+    model = TCN(level=args.level)
 
     model = model.to(device)
 

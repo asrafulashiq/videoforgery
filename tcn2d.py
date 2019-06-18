@@ -140,7 +140,7 @@ class Center(nn.Module):
 
 
 class TemporalBlock(nn.Module):
-    def __init__(self, in_channel, span_kernel=2):
+    def __init__(self, in_channel, span_kernel=1):
         super().__init__()
         self.span_kernel = span_kernel
         self.conv = ConvRelu(in_channel*2, in_channel,
@@ -150,7 +150,7 @@ class TemporalBlock(nn.Module):
     def forward(self, x):
         # x: L, C, H, W
         # L, C, H, W = x.shape
-        x = self.stack(x, n_stack=self.span_kernel-1)
+        x = self.stack(x, n_stack=self.span_kernel)
         x = self.conv(x)
         return x
 
@@ -158,11 +158,16 @@ class TemporalNet(nn.Module):
     def __init__(self, in_channel, level=1):
         super().__init__()
         layers = []
-        for i in range(level):
-            span_len = 2**(i+1)
+        if level == 0:
             layers.append(
-                TemporalBlock(in_channel, span_len)
+                TemporalBlock(in_channel, 0)
             )
+        else:
+            for i in range(level):
+                span_len = 2**i
+                layers.append(
+                    TemporalBlock(in_channel, span_len)
+                )
         self.network = nn.Sequential(*layers)
     
     def forward(self, x):
@@ -176,16 +181,20 @@ class Stack(nn.Module):
         # x : L, C, H, W
         x_pad = F.pad(x, (0,0, 0,0, 0,0, n_stack, 0), mode='constant', value=0)
         # new shape: (L+ns), C, H, W
-        x_stack = torch.cat((x_pad[0:-n_stack], x_pad[n_stack:]), dim=1)
+
+        if n_stack == 0:
+            x_stack = torch.cat((x_pad, x_pad), dim=1)
+        else:
+            x_stack = torch.cat((x_pad[0:-n_stack], x_pad[n_stack:]), dim=1)
         return x_stack
 
 
 class TCN(nn.Module):
-    def __init__(self, span_len=2, num_filters=32, pretrained=True):
+    def __init__(self, level=2, num_filters=32, pretrained=True):
         super().__init__()
         self.encoder = Encoder(pretrained)
         self.center_reduce = ConvRelu(num_filters*16, 64, kernel=1)
-        self.temp = TemporalNet(64, level=1)
+        self.temp = TemporalNet(64, level=level)
         self.center_expand = ConvRelu(64,
                                       num_filters*16,
                                       kernel=1)
