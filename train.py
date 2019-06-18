@@ -7,27 +7,54 @@ from torch.autograd import Variable
 from loss import *
 
 
+def train_tcn(inputs, labels, model, optimizer, args, iteration, device, logger=None,
+              validate=False):
 
-def train_match_in_the_video(
-    dataset, model, optimizer, args, iteration, device, logger=None
-):
-    model.train()
-    X_im, Ind = dataset.load_triplet(num=args.batch_size)
-    X_im = X_im.to(device)
-    Ind = Ind.to(device)
+    if validate:
+        model.eval()
+    else:
+        model.train()
 
-    y_sim = model(X_im[:, [0, 1]])
-    y_dis = model(X_im[:, [0, 2]])
+    init = 0
+    if inputs.shape[0] % 4 != 0:
+        init = int(np.ceil(inputs.shape[0] / args.sep) * args.sep - inputs.shape[0])
+        # l, c, h, w = inputs.shape
+        inputs = F.pad(inputs, (0,0, 0,0, 0,0, init, 0), 'constant', 0)
+        labels = F.pad(labels, (0,0, 0,0, 0,0, init, 0), 'constant', 0)
 
-    loss = Index_loss(y_sim, y_dis, Ind, device)
+    inputs = inputs.to(device)
+    labels = labels.to(device)
 
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    print(f"Iteration: {iteration}  Loss : {loss.data.cpu().numpy():.4f}")
+    y = model(inputs)
+
+    inputs = inputs[init:]
+    labels = labels[init:]
+    y = y[init:]
+
+    if args.loss_type == "dice":
+        fn_loss = dice_loss
+    else:
+        fn_loss = BCE_loss
+
+    # loss = focal_loss(y, labels)
+    # loss = BCE_loss(y, labels)
+    loss = fn_loss(y, labels, with_weight=True)
+    loss_val = loss.data.cpu().numpy()
+
+    if not validate:
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        print(f"Iteration: {iteration:4d} Loss : {loss_val:.4f}")
+    else:
+        print(f"Iteration: {iteration:4d} \t\t Loss : {loss_val:.4f}")
 
     if logger is not None:
-        logger.add_scalar("loss/loss_ind", loss, iteration)
+        if validate:
+            logger.add_scalar("val_loss/total", loss, iteration)
+        else:
+            logger.add_scalar("train_loss/total", loss, iteration)
+
 
 
 def train_with_src(inputs, labels, model, optimizer, args, iteration, device, logger=None,

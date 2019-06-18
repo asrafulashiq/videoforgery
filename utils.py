@@ -27,7 +27,7 @@ class CustomTransform:
         # self.normalize = transforms.Normalize(mean, std)
         self.to_tensor = transforms.ToTensor()
 
-    def __call__(self, img, mask=None):
+    def __call__(self, img=None, mask=None):
         if img is not None:
             if img.dtype == np.uint8:
                 img = (img / 255.0).astype(np.float32)

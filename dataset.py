@@ -146,8 +146,16 @@ class Dataset_image:
             )
 
 
-    def load_videos_all(self):
-        for ind in self.test_index:
+    def load_videos_all(self, is_training=False, shuffle=True):
+        if is_training:
+            idx = self.train_index
+        else:
+            idx = self.test_index
+
+        if shuffle:
+            np.random.shuffle(idx)
+
+        for ind in idx:
             D = self.data[ind]
             name = D['name']
             files = D['files']
@@ -217,10 +225,7 @@ class Dataset_image:
 
         for cnt, _ind in enumerate(idx):
             inf = self.data[_ind]
-            if is_training:
-                maxlen = self.args.batch_size
-            else:
-                maxlen = len(inf["files"])
+            maxlen = len(inf["files"])
 
             if add_prev:
                 dim = 4

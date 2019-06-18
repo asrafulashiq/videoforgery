@@ -30,34 +30,21 @@ def test_track(dataset, model, args, iteration, device, num=None, logger=None):
     counter = 0
     Tscore = np.zeros(4)
     for cnt, (X_all, Y_all) in tqdm(
-            enumerate(dataset.load_videos_track(is_training=False))):
-        # counter = 0
-        prev = None
-        _len = X_all.shape[0]
-        for i in range(_len):
-            X = X_all[i, :3]
-            labels = Y_all[i]
+            enumerate(dataset.load_videos_track(is_training=False, add_prev=False))):
 
-            X = X.to(device)
-            labels = labels.to(device)
-            if i == 0:
-                prev = torch.zeros(labels.shape,
-                                   dtype=torch.float32).to(device)
+        X_all = X_all.to(device)
+        labels = Y_all
 
-            inp = torch.cat((X, prev), 0)
-            preds = model(inp.unsqueeze(0))
-            preds = torch.sigmoid(preds)
-            prev = preds.squeeze(0)
+        preds = model(X_all)
+        preds = torch.sigmoid(preds)
 
-            _preds = preds.squeeze().data.cpu().numpy().flatten()
-            _labels = labels.squeeze().data.cpu().numpy().flatten()
-            _labels = (_labels > 0.5).astype(np.float32)
-            P.extend(_preds.tolist())
-            L.extend(_labels.tolist())
+        f_preds = preds.squeeze().data.cpu().numpy().flatten()
+        f_labels = labels.squeeze().data.cpu().numpy().flatten()
+        f_labels = (f_labels > 0.5).astype(np.float32)
 
-            tt = metrics.confusion_matrix(
-                _labels, (_preds > args.thres)).ravel()
-            Tscore += np.array(tt)
+        tt = metrics.confusion_matrix(
+            f_labels, (f_preds > args.thres)).ravel()
+        Tscore += np.array(tt)
 
         if num is not None and cnt >= num:
             break

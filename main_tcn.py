@@ -11,14 +11,14 @@ from tqdm import tqdm
 # custom module
 import models
 from models import Model, Model_boundary
+from tcn2d import TCN
 import config
 from dataset import Dataset_image
 from utils import CustomTransform
-from train import train, train_with_boundary
-from test import test
+from train import train, train_tcn
+from test import test_track
 
 import warnings
-
 warnings.filterwarnings("ignore")
 
 if __name__ == "__main__":
@@ -29,7 +29,7 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
 
-    args = config.arg_main()
+    args = config.arg_main_tcn()
     print(args)
     # seed
     np.random.seed(args.seed)
@@ -37,12 +37,8 @@ if __name__ == "__main__":
     torch.cuda.manual_seed_all(args.seed)
 
     # model name
-    model_name = (
-        args.model + "_" + args.model_type + "_" + args.videoset + "_" + args.loss_type
-    )
-
-    if args.boundary:
-        model_name += "_boundary"
+    model_name = args.model + "_" + args.model_type + "_" + \
+        args.videoset + "_" + args.loss_type
 
     print(f"Model Name: {model_name}")
 
@@ -51,30 +47,27 @@ if __name__ == "__main__":
 
     # dataset
     tsfm = CustomTransform(size=args.size)
-    if args.videoset == "coco":
+    if args.videoset == 'coco':
         from dataset_coco import COCODataset
-
         dataset = COCODataset(args=args, transform=tsfm)
     else:
         dataset = Dataset_image(args=args, transform=tsfm)
 
     # model
-    if args.boundary:
-        model = Model_boundary()
-        fn_train = train_with_boundary
-    else:
-        fn_train = train
-        model = Model(type=args.model_type)
+    model = TCN()
 
     model = model.to(device)
 
     model_params = filter(lambda p: p.requires_grad, model.parameters())
 
     if args.model_type == "deeplab":
-        model_params = [
-            {"params": model.base.get_1x_lr_params(), "lr": args.lr / 10},
-            {"params": model.base.get_10x_lr_params(), "lr": args.lr},
-        ]
+        model_params = [{
+            'params': model.base.get_1x_lr_params(),
+            'lr': args.lr / 10
+        }, {
+            'params': model.base.get_10x_lr_params(),
+            'lr': args.lr
+        }]
 
     # optimizer
     optimizer = torch.optim.Adam(model_params, lr=args.lr)
@@ -91,47 +84,35 @@ if __name__ == "__main__":
         # init_ep = checkpoint["epoch"]
 
     if args.validate:
-        val_loader = dataset.load_data(
-            args.batch_size * 3, is_training=False, with_boundary=args.boundary
-        )
+        val_loader = dataset.load_videos_track(
+            is_training=False, add_prev=False)
 
     # train
     if args.test:  # test mode
-        test(dataset, model, args, iteration, device, logger)
+        test_track(dataset, model, args, iteration,
+                   device, logger)
     else:  # train
         for ep in tqdm(range(init_ep, args.epoch)):
             # train
-            for x_batch, y_batch, _ in dataset.load_data(
-                args.batch_size, is_training=True, with_boundary=args.boundary
-            ):
-                fn_train(
-                    x_batch, y_batch, model, optimizer, args, iteration, device, logger
-                )
+            for ret in dataset.load_videos_track(
+                    is_training=True, add_prev=False):
+                X, Y_forge = ret
+                train_tcn(X, Y_forge, model, optimizer, args, iteration,
+                          device, logger)
 
                 if args.validate and iteration % 10 == 0:
                     # validate
                     try:
-                        x_val, y_val, _ = next(val_loader)
+                        ret = next(val_loader)
                     except StopIteration:
-                        val_loader = dataset.load_data(
-                            args.batch_size,
-                            is_training=False,
-                            with_boundary=args.boundary,
-                        )
-                        x_val, y_val, _ = next(val_loader)
+                        val_loader = dataset.load_videos_track(
+                            is_training=False, add_prev=False)
+                        ret = next(val_loader)
 
+                    X, Y_forge = ret
                     with torch.no_grad():
-                        fn_train(
-                            x_batch,
-                            y_batch,
-                            model,
-                            optimizer,
-                            args,
-                            iteration,
-                            device,
-                            logger,
-                            validate=True,
-                        )
+                        train_tcn(X, Y_forge, model, optimizer, args, iteration,
+                                  device, logger, validate=True)
 
                 iteration += 1
             # save current state
@@ -147,6 +128,7 @@ if __name__ == "__main__":
             scheduler.step()
 
             # test
-            test(dataset, model, args, iteration, device, logger, max_iter=500)
+            test_track(dataset, model, args, iteration,
+                       device, logger=logger)
 
         logger.close()

@@ -16,7 +16,7 @@ def focal_loss(x, t, gamma=2, with_weight=False):
 
     x = x.view(-1)
     t = t.view(-1)
-    
+
     if with_weight:
         wgt = torch.sum(t) / (t.shape[0])
     else:
@@ -98,19 +98,3 @@ def CrossEntropy2d(input, target):
 
     return loss
 
-
-def Index_loss(ysim, ydis, ind_gt, device):
-    ysim = torch.pow(torch.sigmoid(ysim.squeeze()), 2)
-    ydis = torch.pow(torch.sigmoid(ydis.squeeze()), 2)
-    ind_gt = ind_gt.squeeze()
-
-    y_gt = torch.abs(ind_gt[:, 0] - ind_gt[:, 1])
-    # l1_loss = torch.mean(torch.max(y_gt - y, torch.FloatTensor([0]).to(device)))
-    _loss = torch.mean(torch.max(0.2 + ysim - ydis,
-                                 torch.FloatTensor([0]).to(device)))
-
-    if torch.isnan(_loss):
-        import pdb
-        pdb.set_trace()
-
-    return _loss
