@@ -19,6 +19,20 @@ def fscore(T_score):
     return f_score
 
 
+def conf_mat(labels, preds):
+    if not isinstance(labels, np.ndarray):
+        labels = np.array(labels).ravel()
+    if not isinstance(preds, np.ndarray):
+        preds = np.array(preds).ravel()
+
+    tp = np.sum(preds[labels==1]==1)
+    tn = np.sum(preds[labels==0]==0)
+    fp = np.sum(preds[labels==0]==1)
+    fn = np.sum(preds[labels == 1] == 0)
+    return np.array([tn, fp, fn, tp])
+
+
+
 class CustomTransform:
     def __init__(self, size=224):
         self.size = (size, size)

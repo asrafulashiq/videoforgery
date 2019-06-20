@@ -223,15 +223,18 @@ class TCN2(nn.Module):
 
         self.tcn_forge = Model()
 
-        self.tcn_src = TCN(level=level, in_channel=6, num_classes=1,
+        self.tcn_src = TCN(level=level, in_channel=4, num_classes=1,
                            num_filters=num_filters, pretrained=pretrained, reverse=True)
 
     def forward(self, x):
         y_forge = self.tcn_forge(x)
         y_f_sigmoid = torch.sigmoid(y_forge)
 
+        # x2 = torch.cat((
+        #     x * y_f_sigmoid, x * (1-y_f_sigmoid)
+        # ), 1)
         x2 = torch.cat((
-            x * y_f_sigmoid, x * (1-y_f_sigmoid)
+            x, F.tanh(y_forge)
         ), 1)
         y_src = self.tcn_src(x2)
 

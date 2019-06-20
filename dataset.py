@@ -67,7 +67,7 @@ class Dataset_image:
 
     def split_train_test(self):
         ind = np.arange(len(self.data))
-        np.random.shuffle(ind)
+        # np.random.shuffle(ind)
         ind_unto = int(len(self.data) * self.args.split)
         self.train_index = ind[:ind_unto]
         self.test_index = ind[ind_unto:]

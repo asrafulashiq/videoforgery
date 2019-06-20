@@ -28,7 +28,7 @@ def train_tcn(inputs, labels, model, optimizer, args, iteration, device, logger=
         else:
             fn_loss = BCE_loss
 
-    loss_ = fn_loss(y, labels, with_weight=False)
+    loss_ = fn_loss(y, labels, with_weight=True)
     
     if with_src:
         loss_f = loss_[0].data.cpu().numpy()
