@@ -60,16 +60,16 @@ if __name__ == "__main__":
         dataset = Dataset_image(args=args, transform=tsfm)
 
     # model
-    # if args.boundary:
-    #     model = Model_boundary()
-    #     fn_train = train_with_boundary
-    # else:
-    #     fn_train = train
-    #     model = Model(type=args.model_type)
+    if args.boundary:
+        model = Model_boundary()
+        fn_train = train_with_boundary
+    else:
+        fn_train = train
+        model = Model(type=args.model_type)
 
-    #! Temporary
-    model = TCN()
-    fn_train = train
+    # #! Temporary
+    # model = TCN()
+    # fn_train = train
 
     model = model.to(device)
 

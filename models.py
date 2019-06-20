@@ -25,8 +25,6 @@ def get_model(type, pretrained=True, num_classes=1):
         model = AlbuNet(pretrained=pretrained, num_classes=num_classes)
     elif type == "deeplab":
         model = deeplab.DeepLab(num_classes=num_classes, backbone='xception')
-    elif type == "unet-basic":
-        model = UNet11(pretrained=pretrained, num_classes=num_classes)
     else:
         raise Exception("Wrong model")
     return model
@@ -81,7 +79,7 @@ class Discriminator(nn.Module):
             nn.Conv2d(512, 1, 4, padding=1, bias=False)
         )
 
-        self.apply(init_weights)
+        self.apply(weights_init_normal)
 
     def forward(self, img_A, img_B):
         # Concatenate image and condition image by channels to produce input

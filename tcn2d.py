@@ -213,12 +213,15 @@ class TemporalNet(nn.Module):
     def forward(self, x):
         return self.network(x)
 
+from models import Model
 
 class TCN2(nn.Module):
     def __init__(self, level=2, num_filters=32, pretrained=True):
         super().__init__()
-        self.tcn_forge = TCN(level=1, in_channel=3, num_classes=1,
-                             num_filters=num_filters, pretrained=pretrained)
+        # self.tcn_forge = TCN(level=1, in_channel=3, num_classes=1,
+        #                      num_filters=num_filters, pretrained=pretrained)
+
+        self.tcn_forge = Model()
 
         self.tcn_src = TCN(level=level, in_channel=6, num_classes=1,
                            num_filters=num_filters, pretrained=pretrained, reverse=True)

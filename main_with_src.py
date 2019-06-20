@@ -62,12 +62,16 @@ if __name__ == "__main__":
     init_ep = 0
     # load if pretrained model
 
-    # load coco pretrained
-    coco_path = './ckpt/tcn_coco_unet_coco_bce.pkl'
-    if os.path.exists(coco_path):
-        coco_state = torch.load(coco_path)
-        model.tcn_forge.load_state_dict(coco_state['model_state'])
-        print("COCO pretrained loaded on forge part")
+    # load generator
+    if args.videoset == "davis":
+        gen_ckpt = "./ckpt/GAN_base_unet_davis_bce.pkl"
+    elif args.videoset == "youtube":
+        gen_ckpt = "./ckpt/GAN_base_unet_youtube_bce.pkl"
+
+    if os.path.exists(gen_ckpt):
+        gstate = torch.load(gen_ckpt)["model_state_G"]
+        model.tcn_forge.load_state_dict(gstate)
+        print("loaded forge model")
 
 
     if args.ckpt is not None:
