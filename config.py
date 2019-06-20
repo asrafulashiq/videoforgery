@@ -33,6 +33,8 @@ def arg_common():
     parser.add_argument("--gamma", type=float, default=1,
                         help="gamma")
 
+    parser.add_argument("--suffix", type=str, default="", help="model name suffix")
+
     return parser
 
 

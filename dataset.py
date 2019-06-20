@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from torchvision import transforms
 from collections import defaultdict
-
+import utils
 
 def add_sorp(im, type="pepper"):
     im = skimage.img_as_float32(im)
@@ -103,10 +103,6 @@ class Dataset_image:
             im = cv2.erode(im, kernel)
         elif rand == 2:  # dilation
             im = cv2.dilate(im, kernel)
-        # elif rand == 3:  # salt
-        #     im = add_sorp(im, type="salt")
-        # elif rand == 4:  # pepper
-        #     im = add_sorp(im, type="pepper")
         return im
 
     def _parse_images_with_copy_src(self):
@@ -146,7 +142,7 @@ class Dataset_image:
             )
 
 
-    def load_videos_all(self, is_training=False, shuffle=True):
+    def load_videos_all(self, is_training=False, shuffle=True, to_tensor=True):
         if is_training:
             idx = self.train_index
         else:
@@ -158,7 +154,7 @@ class Dataset_image:
         for ind in idx:
             D = self.data[ind]
             name = D['name']
-            files = D['files']
+            # files = D['files']
             gt_file = os.path.join(str(self.gt_root), Path(name).name + ".pkl")
 
             with open(gt_file, "rb") as fp:
@@ -210,6 +206,10 @@ class Dataset_image:
             if forge_time is not None and forge_time[1] == -1:
                 forge_time[1] = i
                 gt_time[1] = i - offset
+            if to_tensor:
+                X, Y_forge = utils.custom_transform_images(X, Y_forge, size=self.args.size)
+                _, Y_orig = utils.custom_transform_images(None, Y_orig, size=self.args.size)
+
             yield X, Y_forge, forge_time, Y_orig, gt_time, name
 
     def load_videos_track(self, is_training=True, add_prev=True, is_shuffle=True):

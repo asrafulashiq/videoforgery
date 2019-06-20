@@ -49,6 +49,21 @@ class CustomTransform:
             return img
 
 
+def custom_transform_images(images=None, masks=None, size=224):
+    tsfm = CustomTransform(size=size)
+    X, Y = None, None
+    if images is not None:
+        X = torch.zeros((images.shape[0], 3, size, size), dtype=torch.float32)
+        for i in range(images.shape[0]):
+            X[i] = tsfm(img=images[i])
+    if masks is not None:
+        Y = torch.zeros((masks.shape[0], 1, size, size), dtype=torch.float32)
+        for i in range(masks.shape[0]):
+            _, Y[i, 0] = tsfm(img=None, mask=masks[i])
+
+    return X, Y
+
+
 def image_with_mask(im, mask, type="foreground", blend=False):
     im = skimage.img_as_float32(im)
     mask = skimage.img_as_float32(mask)

@@ -34,21 +34,9 @@ def test_track(dataset, model, args, iteration, device, logger=None, num=None):
         inputs = X_all.to(device)
         labels = Y_all
 
-        init = 0
-        if inputs.shape[0] % 4 != 0:
-            init = int(np.ceil(inputs.shape[0] /
-                            args.sep) * args.sep - inputs.shape[0])
-            # l, c, h, w = inputs.shape
-            inputs = F.pad(inputs, (0, 0, 0, 0, 0, 0, init, 0), 'constant', 0)
-            labels = F.pad(labels, (0, 0, 0, 0, 0, 0, init, 0), 'constant', 0)
-
 
         preds = model(inputs)
         preds = torch.sigmoid(preds)
-
-        inputs = inputs[init:]
-        preds = preds[init:]
-        labels = labels[init:]
 
         f_preds = preds.squeeze().data.cpu().numpy().flatten()
         f_labels = labels.squeeze().data.cpu().numpy().flatten()
@@ -70,12 +58,81 @@ def test_track(dataset, model, args, iteration, device, logger=None, num=None):
 
 
 @torch.no_grad()
+def test_tcn(dataset, model, args, iteration, device, logger=None, num=None, with_src=False):
+    model.eval()
+
+    Tscore = np.zeros(4)
+    Tsrc = np.zeros(4)
+    Tall = np.zeros(4)
+    for cnt, ret in tqdm(
+            enumerate(dataset.load_videos_all(is_training=False))):
+
+        X, Y_forge, forge_time, Y_orig, gt_time, name = ret
+        inputs = X.to(device)
+        labels = torch.cat((Y_forge, Y_orig), 1).to(device)
+
+        preds = model(inputs)
+        preds = torch.sigmoid(preds)
+
+        if with_src:
+            pred_src = preds[:, 1]
+            preds = preds[:, 0]
+
+            labels_src = labels[:, 1]
+            labels = labels[:, 0]
+
+        f_preds = preds.squeeze().data.cpu().numpy().flatten()
+        f_preds = f_preds > args.thres
+        f_labels = labels.squeeze().data.cpu().numpy().flatten()
+        f_labels = f_labels > 0.5
+
+        tt = metrics.confusion_matrix(
+            f_labels, f_preds).ravel()
+        Tscore += np.array(tt)
+
+        if with_src:
+            f_preds_s = pred_src.squeeze().data.cpu().numpy().flatten()
+            f_preds_s = f_preds_s > args.thres
+            f_labels_s = labels_src.squeeze().data.cpu().numpy().flatten()
+            f_labels_s = f_labels_s > 0.5
+
+            tt = metrics.confusion_matrix(
+                f_labels_s, f_preds_s).ravel()
+            Tsrc += np.array(tt)
+
+            f_label_all = (f_labels_s + f_labels).clip(max=1)
+            f_pred_all = (f_preds + f_preds_s).clip(max=1)
+            tt = metrics.confusion_matrix(
+                f_label_all, f_pred_all).ravel()
+            Tall += np.array(tt)
+
+
+        if num is not None and cnt >= num:
+            break
+
+    f1_mean = utils.fscore(Tscore)
+    print("TEST")
+    print(f"F1 Score: {f1_mean:.4f}")
+
+    if with_src:
+        f1_mean_src = utils.fscore(Tsrc)
+        print(f"F1 Score src: {f1_mean_src:.4f}")
+        print(f"F1 Score all: {utils.fscore(Tall):.4f}\n")
+
+
+    if logger is not None:
+        logger.add_scalar("score/f1", f1_mean, iteration)
+        if with_src:
+            logger.add_scalar("score/f1_src", f1_mean_src, iteration)
+
+
+
+
+@torch.no_grad()
 def test_CMFD(dataset, args, root, num=None, logger=None):
     from scipy.io import loadmat
 
     Tscore = np.zeros(4)
-
-
     for cnt, ret in enumerate(tqdm(dataset.load_videos_all())):
         X, Y_forge, forge_time, Y_orig, gt_time, name = ret
 

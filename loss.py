@@ -43,7 +43,7 @@ def dice_loss(y, labels):
 def BCE_loss(y, labels, with_weight=False, with_logits=True):
     eps = 1e-8
     y = y.contiguous().view(-1)
-    labels = labels.view(-1)
+    labels = labels.contiguous().view(-1)
 
     _w = torch.sum(labels) / (labels.shape[0])
 
@@ -64,6 +64,14 @@ def BCE_loss(y, labels, with_weight=False, with_logits=True):
         pdb.set_trace()
 
     return bce_loss.float()
+
+
+def BCE_loss_with_src(y, labels, with_weight=False, with_logits=True):
+
+    loss1 = BCE_loss(y[:, 0], labels[:, 0], with_weight=with_weight, with_logits=True)
+    loss2 = BCE_loss(y[:, 1], labels[:, 1], with_weight=with_weight, with_logits=True)
+    return loss1, loss2
+
 
 
 def Two_loss(y, labels):

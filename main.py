@@ -11,6 +11,7 @@ from tqdm import tqdm
 # custom module
 import models
 from models import Model, Model_boundary
+from tcn2d import TCN
 import config
 from dataset import Dataset_image
 from utils import CustomTransform
@@ -59,12 +60,16 @@ if __name__ == "__main__":
         dataset = Dataset_image(args=args, transform=tsfm)
 
     # model
-    if args.boundary:
-        model = Model_boundary()
-        fn_train = train_with_boundary
-    else:
-        fn_train = train
-        model = Model(type=args.model_type)
+    # if args.boundary:
+    #     model = Model_boundary()
+    #     fn_train = train_with_boundary
+    # else:
+    #     fn_train = train
+    #     model = Model(type=args.model_type)
+
+    #! Temporary
+    model = TCN()
+    fn_train = train
 
     model = model.to(device)
 
@@ -122,15 +127,8 @@ if __name__ == "__main__":
 
                     with torch.no_grad():
                         fn_train(
-                            x_batch,
-                            y_batch,
-                            model,
-                            optimizer,
-                            args,
-                            iteration,
-                            device,
-                            logger,
-                            validate=True,
+                            x_batch, y_batch, model, optimizer, args, iteration,
+                            device, logger, validate=True
                         )
 
                 iteration += 1
@@ -147,6 +145,6 @@ if __name__ == "__main__":
             scheduler.step()
 
             # test
-            test(dataset, model, args, iteration, device, logger, max_iter=500)
+            test(dataset, model, args, iteration, device, logger, max_iter=400)
 
         logger.close()

@@ -8,37 +8,35 @@ from loss import *
 
 
 def train_tcn(inputs, labels, model, optimizer, args, iteration, device, logger=None,
-              validate=False):
+              validate=False, with_src=False):
 
     if validate:
         model.eval()
     else:
         model.train()
 
-    init = 0
-    if inputs.shape[0] % 4 != 0:
-        init = int(np.ceil(inputs.shape[0] / args.sep) * args.sep - inputs.shape[0])
-        # l, c, h, w = inputs.shape
-        inputs = F.pad(inputs, (0,0, 0,0, 0,0, init, 0), 'constant', 0)
-        labels = F.pad(labels, (0,0, 0,0, 0,0, init, 0), 'constant', 0)
-
     inputs = inputs.to(device)
     labels = labels.to(device)
 
     y = model(inputs)
 
-    inputs = inputs[init:]
-    labels = labels[init:]
-    y = y[init:]
-
     if args.loss_type == "dice":
         fn_loss = dice_loss
     else:
-        fn_loss = BCE_loss
+        if with_src:
+            fn_loss = BCE_loss_with_src
+        else:
+            fn_loss = BCE_loss
 
-    # loss = focal_loss(y, labels)
-    # loss = BCE_loss(y, labels)
-    loss = fn_loss(y, labels, with_weight=True)
+    loss_ = fn_loss(y, labels, with_weight=False)
+    
+    if with_src:
+        loss_f = loss_[0].data.cpu().numpy()
+        loss_s = loss_[1].data.cpu().numpy()
+        loss = loss_[0] + loss_[1]
+    else:
+        loss = loss_
+
     loss_val = loss.data.cpu().numpy()
 
     if not validate:
@@ -48,12 +46,19 @@ def train_tcn(inputs, labels, model, optimizer, args, iteration, device, logger=
         print(f"Iteration: {iteration:4d} Loss : {loss_val:.4f}")
     else:
         print(f"Iteration: {iteration:4d} \t\t Loss : {loss_val:.4f}")
+    
+    if with_src:
+        print(f"\t loss_f: {loss_f:.4f}  loss_s:{loss_s:.4f}")
 
     if logger is not None:
         if validate:
             logger.add_scalar("val_loss/total", loss, iteration)
         else:
             logger.add_scalar("train_loss/total", loss, iteration)
+            if with_src:
+                logger.add_scalar("train_loss/total_frg", loss_[0], iteration)
+                logger.add_scalar("train_loss/total_src", loss_[1], iteration)
+
 
 
 

@@ -11,8 +11,16 @@ def init_weights(module):
         nn.init.xavier_uniform_(module.weight)
         module.bias.data.fill_(0.0)
 
+
 def conv3x3(in_, out, kernel=3):
     return nn.Conv2d(in_, out, kernel, padding=kernel//2)
+
+class Identity(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x
 
 
 class ConvRelu(nn.Module):
@@ -53,8 +61,18 @@ class DecoderBlock(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, pretrained=False):
+    def __init__(self, in_channel=3, pretrained=True):
         super().__init__()
+
+        if in_channel != 3:
+            self.init_layer = nn.Sequential(
+                nn.Conv2d(in_channel, out_channels=3, kernel_size=1),
+                nn.Tanh()
+            )
+            self.init_layer.apply(init_weights)
+        else:
+            self.init_layer = Identity()
+
         self.pool = nn.MaxPool2d(2, 2)
 
         encoder = models.vgg11(pretrained=pretrained).features
@@ -71,6 +89,7 @@ class Encoder(nn.Module):
         self.conv5 = encoder[18]
 
     def forward(self, x):
+        x = self.init_layer(x)
         conv1 = self.relu(self.conv1(x))
         conv2 = self.relu(self.conv2(self.pool(conv1)))
         conv3s = self.relu(self.conv3s(self.pool(conv2)))
@@ -139,49 +158,18 @@ class Center(nn.Module):
         return self.center_reduce(x)
 
 
-class TemporalBlock(nn.Module):
-    def __init__(self, in_channel, span_kernel=1):
-        super().__init__()
-        self.span_kernel = span_kernel
-        self.conv = ConvRelu(in_channel*2, in_channel,
-                             kernel=3)
-        self.stack = Stack()
-
-    def forward(self, x):
-        # x: L, C, H, W
-        # L, C, H, W = x.shape
-        x = self.stack(x, n_stack=self.span_kernel)
-        x = self.conv(x)
-        return x
-
-class TemporalNet(nn.Module):
-    def __init__(self, in_channel, level=1):
-        super().__init__()
-        layers = []
-        if level == 0:
-            layers.append(
-                TemporalBlock(in_channel, 0)
-            )
-        else:
-            for i in range(level):
-                span_len = 2**i
-                layers.append(
-                    TemporalBlock(in_channel, span_len)
-                )
-        self.network = nn.Sequential(*layers)
-    
-    def forward(self, x):
-        return self.network(x)
-
 class Stack(nn.Module):
     def __init__(self, n_stack=1):
         super().__init__()
 
-    def forward(self, x, n_stack=1):
+    def forward(self, x, n_stack=1, reverse=False):
         # x : L, C, H, W
-        x_pad = F.pad(x, (0,0, 0,0, 0,0, n_stack, 0), mode='constant', value=0)
-        # new shape: (L+ns), C, H, W
-
+        if reverse:
+            x_pad = F.pad(x, (0, 0, 0, 0, 0, 0, 0, n_stack),
+                          mode='constant', value=0)
+        else:
+            x_pad = F.pad(x, (0, 0, 0, 0, 0, 0, n_stack, 0),
+                          mode='constant', value=0)
         if n_stack == 0:
             x_stack = torch.cat((x_pad, x_pad), dim=1)
         else:
@@ -189,17 +177,77 @@ class Stack(nn.Module):
         return x_stack
 
 
-class TCN(nn.Module):
+class TemporalBlock(nn.Module):
+    def __init__(self, in_channel, span_kernel=1, reverse=False):
+        super().__init__()
+        self.span_kernel = span_kernel
+        self.reverse = reverse
+        self.conv = ConvRelu(in_channel*2, in_channel,
+                             kernel=3)
+        self.stack = Stack()
+
+    def forward(self, x):
+        # x: L, C, H, W
+        # L, C, H, W = x.shape
+        x = self.stack(x, n_stack=self.span_kernel, reverse=self.reverse)
+        x = self.conv(x)
+        return x
+
+
+class TemporalNet(nn.Module):
+    def __init__(self, in_channel, level=1, reverse=False):
+        super().__init__()
+        layers = []
+        if level == 0:
+            layers.append(
+                TemporalBlock(in_channel, 0, reverse=reverse)
+            )
+        else:
+            for i in range(level):
+                span_len = 2**i
+                layers.append(
+                    TemporalBlock(in_channel, span_len, reverse=reverse)
+                )
+        self.network = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.network(x)
+
+
+class TCN2(nn.Module):
     def __init__(self, level=2, num_filters=32, pretrained=True):
         super().__init__()
-        self.encoder = Encoder(pretrained)
+        self.tcn_forge = TCN(level=1, in_channel=3, num_classes=1,
+                             num_filters=num_filters, pretrained=pretrained)
+
+        self.tcn_src = TCN(level=level, in_channel=6, num_classes=1,
+                           num_filters=num_filters, pretrained=pretrained, reverse=True)
+
+    def forward(self, x):
+        y_forge = self.tcn_forge(x)
+        y_f_sigmoid = torch.sigmoid(y_forge)
+
+        x2 = torch.cat((
+            x * y_f_sigmoid, x * (1-y_f_sigmoid)
+        ), 1)
+        y_src = self.tcn_src(x2)
+
+        return torch.cat((y_forge, y_src), 1)
+
+
+class TCN(nn.Module):
+    def __init__(self, level=1, in_channel=3, num_classes=1, num_filters=32, pretrained=True,
+                reverse=False):
+        super().__init__()
+        self.encoder = Encoder(in_channel=in_channel, pretrained=pretrained)
         self.center_reduce = ConvRelu(num_filters*16, 64, kernel=1)
-        self.temp = TemporalNet(64, level=level)
+        self.temp = TemporalNet(64, level=level, reverse=reverse)
         self.center_expand = ConvRelu(64,
                                       num_filters*16,
                                       kernel=1)
 
-        self.decoder = Decoder(num_filters=num_filters, num_classes=1)
+        self.decoder = Decoder(num_filters=num_filters,
+                               num_classes=num_classes)
 
     def forward(self, x):
         # x: L, 3, H, W
