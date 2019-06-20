@@ -42,7 +42,7 @@ def test_track(dataset, model, args, iteration, device, logger=None, num=None):
         f_labels = labels.squeeze().data.cpu().numpy().flatten()
         f_labels = (f_labels > 0.5).astype(np.float32)
 
-        tt = metrics.confusion_matrix(
+        tt = utils.conf_mat(
             f_labels, (f_preds > args.thres)).ravel()
         Tscore += np.array(tt)
 
@@ -86,7 +86,7 @@ def test_tcn(dataset, model, args, iteration, device, logger=None, num=None, wit
         f_labels = labels.squeeze().data.cpu().numpy().flatten()
         f_labels = f_labels > 0.5
 
-        tt = metrics.confusion_matrix(
+        tt = utils.conf_mat(
             f_labels, f_preds).ravel()
         Tscore += np.array(tt)
 
@@ -96,13 +96,13 @@ def test_tcn(dataset, model, args, iteration, device, logger=None, num=None, wit
             f_labels_s = labels_src.squeeze().data.cpu().numpy().flatten()
             f_labels_s = f_labels_s > 0.5
 
-            tt = metrics.confusion_matrix(
+            tt = utils.conf_mat(
                 f_labels_s, f_preds_s).ravel()
             Tsrc += np.array(tt)
 
             f_label_all = (f_labels_s + f_labels).clip(max=1)
             f_pred_all = (f_preds + f_preds_s).clip(max=1)
-            tt = metrics.confusion_matrix(
+            tt = utils.conf_mat(
                 f_label_all, f_pred_all).ravel()
             Tall += np.array(tt)
 
@@ -133,22 +133,24 @@ def test_CMFD(dataset, args, root, num=None, logger=None):
     from scipy.io import loadmat
 
     Tscore = np.zeros(4)
-    for cnt, ret in enumerate(tqdm(dataset.load_videos_all())):
+    for cnt, ret in enumerate(tqdm(dataset.load_videos_all(to_tensor=False, shuffle=False))):
         X, Y_forge, forge_time, Y_orig, gt_time, name = ret
 
         matfile = os.path.join(
             root, name+".mat"
         )
+
         assert os.path.exists(matfile)
         predY = loadmat(matfile)['map']
-        predY = predY.transpose((2, 0, 1))
+        predY = predY.transpose((2, 0, 1)).astype(np.float)
 
         for i in range(Y_forge.shape[0]):
             pred_o = predY[i]
-            labels = (Y_forge[i] > 0) & (Y_orig[i] > 0)
+            labels = (Y_forge[i] > 0) + (Y_orig[i] > 0)
             pred = skimage.transform.resize(pred_o, labels.shape[:2])
-
-            tt = metrics.confusion_matrix(
+            # if np.sum(pred) > 0:
+            #     print(np.max(pred))
+            tt = utils.conf_mat(
                 labels.ravel(), (pred > args.thres).ravel()).ravel()
             Tscore += np.array(tt)
 
@@ -258,7 +260,7 @@ def test(dataset, model, args, iteration, device, logger=None, max_iter=None):
         labels = labels.squeeze().data.cpu().numpy()
         labels = (labels > 0.5).astype(np.float32)
 
-        tt = metrics.confusion_matrix(
+        tt = utils.conf_mat(
             labels.ravel(), (preds > args.thres).ravel()).ravel()
         Tscore += np.array(tt)
         counter += X.shape[0]
@@ -305,13 +307,13 @@ def test_with_src(dataset,
 
         preds_bool = preds > args.thres
 
-        tforg = metrics.confusion_matrix((labels == 2).ravel(),
+        tforg = utils.conf_mat((labels == 2).ravel(),
                                          preds_bool[:, 2].ravel()).ravel()
 
-        tsrc = metrics.confusion_matrix((labels == 1).ravel(),
+        tsrc = utils.conf_mat((labels == 1).ravel(),
                                         preds_bool[:, 1].ravel()).ravel()
 
-        tback = metrics.confusion_matrix((labels == 0).ravel(),
+        tback = utils.conf_mat((labels == 0).ravel(),
                                          preds_bool[:, 0].ravel()).ravel()
 
         Tforge += tforg
@@ -339,6 +341,7 @@ def test_with_src(dataset,
         logger.add_scalar("score/f1_src", f1_src, iteration)
         logger.add_scalar("score/f1_forge", f1_forge, iteration)
         logger.add_scalar("score/f1_back", f1_back, iteration)
+
 
 
 def score_report(y_pred, y_gt, args, iteration, logger=None):
