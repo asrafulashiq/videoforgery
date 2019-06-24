@@ -8,6 +8,7 @@ import cv2
 import skimage
 import imutils
 from skimage import io
+from skimage import transform
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
@@ -32,6 +33,43 @@ def conf_mat(labels, preds):
     return np.array([tn, fp, fn, tp])
 
 
+class SimTransform():
+    def __init__(self, size=(224, 224)):
+        # scale
+        self.scale = np.random.choice(
+            np.linspace(0.9, 1.5, 30)
+        )
+        # rotation
+        self.rot = np.random.choice(
+            np.linspace(-np.pi/10, np.pi/10, 50)
+        )
+        # translate
+        self.translate = (
+            np.random.choice(np.linspace(-0.05 * size[1], 0.1 * size[1], 50)),
+            np.random.choice(np.linspace(-0.05 * size[0], 0.1 * size[0], 50))
+        )
+
+        # flip lr
+        self.flip = np.random.rand() > 0.5
+
+        self.tfm = transform.SimilarityTransform(
+            scale=self.scale,
+            translation=self.translate)
+
+    def __call__(self, im=None, mask=None):
+        if im is not None:
+            im = transform.warp(im, self.tfm)
+            im = transform.rotate(im, self.rot)
+            if self.flip:
+                im = np.flip(im, 1).copy()
+        if mask is not None:
+            mask = transform.warp(mask, self.tfm)
+            mask = transform.rotate(mask, self.rot)
+            if self.flip:
+                mask = np.flip(mask, 1).copy()
+        return im, mask
+
+
 
 class CustomTransform:
     def __init__(self, size=224):
@@ -41,20 +79,28 @@ class CustomTransform:
         # self.normalize = transforms.Normalize(mean, std)
         self.to_tensor = transforms.ToTensor()
 
-    def __call__(self, img=None, mask=None):
+    def resize(self, img=None, mask=None):
         if img is not None:
-            if img.dtype == np.uint8:
-                img = (img / 255.0).astype(np.float32)
+            img = skimage.img_as_float32(img)
             if img.shape[0] != self.size[0] or img.shape[1] != self.size[1]:
                 img = cv2.resize(
                     img, self.size, interpolation=cv2.INTER_LINEAR)
-            img = (img - self.mean) / self.std
-            img = self.to_tensor(img)
 
         if mask is not None:
             if mask.shape[0] != self.size[0] or mask.shape[1] != self.size[1]:
                 mask = cv2.resize(
                     mask, self.size, interpolation=cv2.INTER_NEAREST)
+        return img, mask
+
+    def __call__(self, img=None, mask=None, other_tfm=None):
+        img, mask = self.resize(img, mask)
+        if other_tfm is not None:
+            img, mask = other_tfm(img, mask)
+        if img is not None:
+            img = (img - self.mean) / self.std
+            img = self.to_tensor(img)
+
+        if mask is not None:
             mask = self.to_tensor(mask)
 
             return img, mask
@@ -63,17 +109,17 @@ class CustomTransform:
             return img
 
 
-def custom_transform_images(images=None, masks=None, size=224):
+def custom_transform_images(images=None, masks=None, size=224, other_tfm=None):
     tsfm = CustomTransform(size=size)
     X, Y = None, None
     if images is not None:
         X = torch.zeros((images.shape[0], 3, size, size), dtype=torch.float32)
         for i in range(images.shape[0]):
-            X[i] = tsfm(img=images[i])
+            X[i] = tsfm(img=images[i], other_tfm=other_tfm)
     if masks is not None:
         Y = torch.zeros((masks.shape[0], 1, size, size), dtype=torch.float32)
         for i in range(masks.shape[0]):
-            _, Y[i, 0] = tsfm(img=None, mask=masks[i])
+            _, Y[i, 0] = tsfm(img=None, mask=masks[i], other_tfm=other_tfm)
 
     return X, Y
 
