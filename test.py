@@ -136,7 +136,7 @@ def test_CMFD(dataset, args, root, num=None, logger=None):
     for cnt, ret in enumerate(tqdm(dataset.load_videos_all(to_tensor=False, shuffle=False))):
         X, Y_forge, forge_time, Y_orig, gt_time, name = ret
 
-        matfile = os.path.join(
+        matfile = os.papth.join(
             root, name+".mat"
         )
 

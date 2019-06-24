@@ -136,7 +136,7 @@ class UNet11_two_branch_out(nn.Module):
 
 class UNet11(nn.Module):
     def __init__(self, num_filters=32, pretrained=False, num_classes=1,
-                 mod=False, mod_chan=4):
+                 in_channels=3):
         """
         :param num_classes:
         :param num_filters:
@@ -150,13 +150,14 @@ class UNet11(nn.Module):
         self.encoder = models.vgg11(pretrained=pretrained).features
 
         self.relu = self.encoder[1]
-        if mod:
+        if in_channels != 3:
             enc = self.encoder[0]
             self.conv1 = torch.nn.Conv2d(
-                mod_chan, enc.out_channels, kernel_size=enc.kernel_size,
+                in_channels, enc.out_channels, kernel_size=enc.kernel_size,
                 stride=enc.stride, padding=enc.padding)
             self.conv1.weight.data[:, :3].copy_(enc.weight.data[:, :3])
-            self.conv1.weight.data[:, -1].copy_(enc.weight.data[:, -1])
+            self.conv1.weight.data[:, 3:].copy_(
+                torch.cat([enc.weight.data[:, -1]]*(in_channels-3), dim=1))
             self.conv1.bias.data = enc.bias.data
         else:
             self.conv1 = self.encoder[0]

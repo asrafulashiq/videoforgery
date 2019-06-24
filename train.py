@@ -166,20 +166,9 @@ def train_GAN(inputs, labels, model, optimizer, args, iteration, device, logger=
         fn_loss = BCE_loss
     fn_dis_loss = nn.BCEWithLogitsLoss()
 
-    # Generator
-    pred_fake = discriminator(torch.sigmoid(y), inputs)
-    loss_gen = fn_loss(y, labels, with_weight=False)
-    loss_dis = fn_dis_loss(pred_fake, valid.expand_as(pred_fake))
-
-    loss_G = 0.5 * (loss_gen + args.gamma * loss_dis)
-
-    if not validate:
-        optimizer_G.zero_grad()
-        loss_G.backward()
-        optimizer_G.step()
-
-
     # Discriminator
+    optimizer_D.zero_grad()
+
     pred_real = discriminator(labels, inputs)
     loss_real = fn_dis_loss(pred_real, valid.expand_as(pred_real))
 
@@ -189,9 +178,22 @@ def train_GAN(inputs, labels, model, optimizer, args, iteration, device, logger=
     loss_D = 0.5 * (loss_real + loss_fake)
 
     if not validate:
-        optimizer_D.zero_grad()
         loss_D.backward()
         optimizer_D.step()
+
+
+    # Generator
+    optimizer_G.zero_grad()
+
+    pred_fake = discriminator(torch.sigmoid(y), inputs)
+    loss_gen = fn_loss(y, labels, with_weight=False)
+    loss_dis = fn_dis_loss(pred_fake, valid.expand_as(pred_fake))
+
+    loss_G = 0.5 * (loss_gen + args.gamma * loss_dis)
+
+    if not validate:
+        loss_G.backward()
+        optimizer_G.step()
 
 
     if not validate:
@@ -263,3 +265,54 @@ def train_with_boundary(
         logger.add_scalar(f"{pref}/total", loss, iteration)
         logger.add_scalar(f"{pref}/mask", loss_mask, iteration)
         logger.add_scalar(f"{pref}/boundary", loss_boundary, iteration)
+
+
+def train_with_src(ret, model, optimizer, args, iteration, device, logger=None,
+                   validate=False):
+
+    if validate:
+        model.eval()
+    else:
+        model.train()
+
+    X, Y_forge, forge_time, Y_orig, gt_time, name = ret
+
+    X = X.to(device)
+    X_f = X * Y_forge
+    X_nf = X * (1 - Y_forge)
+
+    ind_s, ind_m, ind_e = forge_time[0], forge_time[len(
+        forge_time)//2], forge_time[-1]
+    _len = len(forge_time)
+    X_ref = X_f[[ind_s, ind_m, ind_e]]
+
+    X_in = torch.zeros((X.shape[0]-_len, 18, *X.shape[-3:]), dtype=torch.float32)
+    for i in range(X.shape[0]-_len):
+        x_now = X_nf[[i, i+len(forge_time)//2, i+len(forge_time)]]
+        x1 = X_ref.reshape(-1, *X_ref.shape[-3])
+        x2 = x_now.reshape(-1, *X_ref.shape[-3])
+        X_in[i] = torch.cat(
+            (x1, x2), dim=0
+        )
+    
+    # prediction
+    y = model(X_in)
+
+    loss = fn_loss(y, labels)
+
+    loss_val = loss.data.cpu().numpy()
+
+    if not validate:
+        optimizer.zero_grad()
+        loss.backward()
+        # nn.utils.clip_grad_norm_(model.parameters(), args.clip)
+        optimizer.step()
+        print(f"Iteration: {iteration:4d} Loss : {loss_val:.4f}")
+    else:
+        print(f"Iteration: {iteration:4d} \t\t Loss : {loss_val:.4f}")
+
+    if logger is not None:
+        if validate:
+            logger.add_scalar("val_loss/total", loss, iteration)
+        else:
+            logger.add_scalar("train_loss/total", loss, iteration)

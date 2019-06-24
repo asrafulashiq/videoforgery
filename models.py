@@ -130,3 +130,33 @@ class Model_comp(nn.Module):
 
         return y
 
+
+class Stack(nn.Module):
+    def __init__(self, n_stack=1):
+        super().__init__()
+
+    def forward(self, x, n_stack=1, reverse=False):
+        # x : L, C, H, W
+        if reverse:
+            x_pad = F.pad(x, (0, 0, 0, 0, 0, 0, 0, n_stack),
+                          mode='constant', value=0)
+        else:
+            x_pad = F.pad(x, (0, 0, 0, 0, 0, 0, n_stack, 0),
+                          mode='constant', value=0)
+        if n_stack == 0:
+            x_stack = torch.cat((x_pad, x_pad), dim=1)
+        else:
+            x_stack = torch.cat((x_pad[0:-n_stack], x_pad[n_stack:]), dim=1)
+        return x_stack
+
+
+class Model_search(nn.Module):
+    def __init__(self, in_frames=6):
+        super().__init__()
+        self.base = UNet11(in_channels=in_frames*3, num_classes=in_frames//2)
+
+    def forward(self, x):
+        x = torch.cat((x_ref, x_tar), dim=1)
+        y = self.base(x)
+
+        return y
