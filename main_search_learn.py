@@ -8,16 +8,18 @@ from torch import nn
 from torchvision import transforms
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
+import cv2
+from matplotlib import pyplot as plt
+from pathlib import Path
+import torch.nn.functional as F
+import skimage
 
 # custom module
-import models
-from models import Model, Model_boundary, Model_search
 import config
 from dataset import Dataset_image
 from utils import CustomTransform
-from train import train, train_tcn
-from test import test_tcn
-from tcn2d import TCN, TCN2
+from matching import tools
+
 
 if __name__ == "__main__":
     # device
@@ -35,6 +37,7 @@ if __name__ == "__main__":
 
     args.loss_type = ""
     # model name
+    args.model = "match"
     model_name = args.model + "_" + args.model_type + "_" + \
         args.videoset + args.suffix
 
@@ -44,16 +47,14 @@ if __name__ == "__main__":
     logger = SummaryWriter("./logs/" + model_name)
 
     # dataset
-    tsfm = CustomTransform(size=args.size)
-    if args.videoset == 'coco':
-        from dataset_coco import COCODataset
-        dataset = COCODataset(args=args, transform=tsfm)
-    else:
-        dataset = Dataset_image(args=args, transform=tsfm)
+    tsfm = CustomTransform
+
+    dataset = Dataset_image(args=args, transform=tsfm)
 
     # model
 
-    model = Model_search(in_frames=6)
+    model = tools.MatcherPair(type='resnet')
+    model.to(device)
 
     iteration = 1
     init_ep = 0
@@ -71,66 +72,72 @@ if __name__ == "__main__":
 
     model.to(device)
 
-    model_params = filter(lambda p: p.requires_grad, model.parameters())
+    # model_params = filter(lambda p: p.requires_grad, model.parameters())
+    # # optimizer
+    # optimizer = torch.optim.Adam(model_params, lr=args.lr)
+    # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 
-    # optimizer
-    optimizer = torch.optim.Adam(model_params, lr=args.lr)
+    model.eval()
+    for ep in tqdm(range(init_ep, args.epoch)):
+        # train
+        for ret in dataset.load_videos_all(is_training=False, to_tensor=False):
+            X, Y_forge, forge_time, Y_orig, gt_time, name = ret
+            
+            iou_all = []
+            forge_time = np.arange(forge_time[0], forge_time[1] + 1)
+            gt_time = np.arange(gt_time[0], gt_time[1] + 1)
+            print(f"{name}")
+            print("-----------------")
+            savepath = Path("tmp3") / name
+            savepath.mkdir(parents=True, exist_ok=True)
+            for k in range(len(forge_time)):
+                ind_forge = forge_time[k]
+                ind_orig = gt_time[k]
 
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
+                im_orig = X[ind_orig]
+                im_forge = X[ind_forge]
 
-    if args.validate:
-        val_loader = dataset.load_videos_all(is_training=False)
+                im_forge_mask = im_forge * Y_forge[ind_forge][..., None]
+                im_orig_mask = im_orig * (1 - Y_forge[ind_orig])[..., None]
 
-    # train
-    if args.test:  # test mode
-        test_tcn(dataset, model, args, iteration, device,
-                 logger=logger, num=None,  with_src=True)
-    else:  # train
-        for ep in tqdm(range(init_ep, args.epoch)):
-            # train
-            for ret in dataset.load_videos_all(is_training=True):
-                X, Y_forge, forge_time, Y_orig, gt_time, name = ret
-                x_batch = X
-                y_batch = torch.cat((Y_forge, Y_orig), 1)
-                train_tcn(x_batch, y_batch, model, optimizer, args, iteration,
-                          device, logger, with_src=True)
+                bb_forge = tools.get_bbox(Y_forge[ind_forge] > 0.5)
+                bb_orig = tools.get_bbox(Y_orig[ind_orig] > 0.5)
 
-                if args.validate and iteration % 10 == 0:
-                    # validate
-                    try:
-                        ret = next(val_loader)
-                    except StopIteration:
-                        val_loader = dataset.load_videos_all(is_training=False)
-                        ret = next(val_loader)
-                    X, Y_forge, forge_time, Y_orig, gt_time, name = ret
-                    x_batch = X
-                    y_batch = torch.cat((Y_forge, Y_orig), 1)
+                x, y, w, h = bb_forge
+                im_f = im_forge_mask[y:y+h, x:x+w]
 
-                    with torch.no_grad():
-                        train_tcn(x_batch, y_batch, model, optimizer, args, iteration,
-                                  device, logger, with_src=True, validate=True)
+                # transform
+                im_ot = tsfm(size=(240, 240))(im_orig_mask)
+                im_ft = tsfm(size=(48, 48))(im_f)
 
-                iteration += 1
-            # save current state
-            torch.save(
-                {
-                    "epoch": ep,
-                    "model_state": model.module.state_dict()
-                    if isinstance(model, nn.DataParallel)
-                    else model.state_dict(),
-                    "opt_state": optimizer.state_dict(),
-                },
-                "./ckpt/" + model_name + ".pkl",
-            )
+                im_ref = im_ot.unsqueeze(0).to(device)
+                im_t = im_ft.unsqueeze(0).to(device)
+                with torch.no_grad():
+                    map_o = model(im_ref, im_t)
+                map_o = map_o.squeeze()
 
-            # scheduler.step()
+                map_o = map_o.data.cpu().numpy()
+                map_o = skimage.transform.resize(map_o, im_orig.shape[:2])
+                map_o[bb_forge[1]:bb_forge[1]+bb_forge[3],
+                      bb_forge[0]:bb_forge[0]+bb_forge[2]] = 0
+                pred_bbox = tools.locate_bbox(map_o, w, h)
 
-            # test
-            if (ep + 1) % 5 == 0:
-                num = None
-                print("TEST ALL DATA !!!!!!!!!!")
-            else:
-                num = 10
-            test_tcn(dataset, model, args, iteration, device,
-                     logger=logger, num=num, with_src=True)
-        logger.close()
+                iou = tools.IoU(pred_bbox, bb_orig)
+                print(f"\t{k}: iou  {iou}")
+                iou_all.append(iou)
+
+                # draw
+                imcopy = tools.draw_rect(im_forge_mask, bb_forge)
+                imsrc = tools.draw_rect(im_orig_mask, pred_bbox, bb_orig
+                
+                )
+
+                fig, ax = plt.subplots(1, 3, figsize=(14, 8))
+                ax[0].imshow(imcopy)
+                ax[1].imshow(imsrc)
+                ax[2].imshow(map_o, cmap='gray')
+                fname = savepath / f"{k}.png"
+                fig.savefig(fname)
+            plt.close('all')
+
+            print("\n\t Iou Mean: ", np.mean(iou_all))

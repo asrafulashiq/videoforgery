@@ -89,7 +89,6 @@ def template_vid(X_m, X_ref, matcher, Y_orig, act_ind):
     return (flag[1], flag[1]+gt_len), T_score, X_src
 
 
-
 def match_in_the_video(dataset, args):
     """match an image with forged match in the video
     """
