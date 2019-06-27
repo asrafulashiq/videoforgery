@@ -264,11 +264,15 @@ def train_with_boundary(
 def train_template_match(Xs, Xt, Y, model, optimizer, args, iteration, device,
                          logger=None):
     model.train()
+
+    if iteration > 300:
+        model.set_bn_to_eval()
+
     Xs, Xt, Y = Xs.to(device), Xt.to(device), Y.to(device)
 
     pred = model(Xs, Xt)
 
-    loss = BCE_loss(pred, Y)
+    loss = BCE_loss(pred, Y, with_weight=True)
     # loss = dice_loss(pred, Y)
 
 

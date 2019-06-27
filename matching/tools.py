@@ -42,7 +42,7 @@ class FeatureExtractor(nn.Module):
         x2 = self.feat2(x1)  # 64, H / 2, W / 2
         # x2 = F.interpolate(x2, size=x1.size()[-2:], mode='bicubic',
         #                    align_corners=True)
-        # x3 = torch.cat((x1, x2), dim=-3)   
+        # x3 = torch.cat((x1, x2), dim=-3)
         out = self.feat3(x2)  # 192, H/2, W/2
         return out, x1  # x2 is low-level features
 
@@ -72,7 +72,6 @@ class Normalizer(nn.Module):
         return x1, x2
 
 
-
 def weights_init_normal(m):
     classname = m.__class__.__name__
     if classname.find("Conv") != -1:
@@ -95,16 +94,19 @@ class MatcherPair(nn.Module):
         self.tem_pool = nn.Sequential(
             nn.Conv2d(64, 64, 3, padding=1),
             nn.ReLU(),
-            nn.AdaptiveMaxPool2d(patch_size) 
+            nn.AdaptiveMaxPool2d(patch_size)
         )
 
         self.k = 10
+        self.n_div = (4, 4)
+
         self.final = nn.Sequential(
             nn.Conv2d(32+64, 1, 1),
         )
 
         self.out_conv1 = nn.Sequential(
-            nn.Conv2d(self.k, 32, kernel_size=3, padding=1),
+            nn.Conv2d(self.n_div[0]*self.n_div[1], 32,
+                      kernel_size=3, padding=1),
             nn.ReLU(),
             nn.Dropout(0.2)
         )
@@ -115,33 +117,63 @@ class MatcherPair(nn.Module):
             nn.Dropout(0.2)
         )
 
+        self.match_bnorm = nn.BatchNorm2d(1)
+
         self.final.apply(weights_init_normal)
         self.out_conv1.apply(weights_init_normal)
         self.out_conv2.apply(weights_init_normal)
         self.tem_pool.apply(weights_init_normal)
 
+    def set_bn_to_eval(self):
+        def fn(m):
+            classname = m.__class__.__name__
+            if classname.find('BatchNorm') != -1:
+                m.eval()
+        self.apply(fn)
+
+    def corr(self, X, x):
+        B, C, H, W = X.shape
+        h, w = x.shape[-2:]
+        X = X.reshape(1, B*C, H, W)
+
+        hh = h//self.n_div[0]
+        ww = w//self.n_div[1]
+        x = x.reshape(B, C, self.n_div[0], hh, self.n_div[1], ww)
+        x = x.permute(0, 2, 4, 1, 3, 5).reshape(-1, C, hh, ww)
+
+        match_map = F.conv2d(
+            X, x, groups=B,
+            padding=(hh//2, ww//2))  # 1, B * n^2, H, W
+        match_map = F.interpolate(match_map, size=(H, W), mode='bilinear')
+        match_map = match_map.permute(1, 0, 2, 3)
+        match_map = self.match_bnorm(match_map)
+        match_map = match_map.squeeze(0).view(B, -1, H, W)
+        return match_map
+
     def forward(self, x_ref, x_template):
         fref_feat, fref_low = self.feature_extractor(x_ref)  # C, 112, 112
         ftem_feat, _ = self.feature_extractor(x_template)  # C, 112, 112
 
-        fref, ftem = self.normalizer(fref_feat, ftem_feat)
+        # fref, ftem = self.normalizer(fref_feat, ftem_feat)
 
-        # downsample ftem to (12, 12)
-        ftem = self.tem_pool(ftem)
+        # # downsample ftem to (12, 12)
+        # ftem = self.tem_pool(ftem)
 
-        dist = torch.einsum('bcmn, bcpq -> bmnpq', (fref, ftem))
-        _, m, n, p, q = dist.shape
-        dist = dist.reshape(-1, m*n, p*q)
+        # dist = torch.einsum('bcmn, bcpq -> bmnpq', (fref, ftem))
+        # _, m, n, p, q = dist.shape
+        # dist = dist.reshape(-1, m*n, p*q)
 
-        # conf_ref = F.softmax(self.coef_ref * dist, dim=-2)
-        # conf_tmp = F.softmax(self.coef_temp * dist, dim=-1)
-        # confidence = torch.sqrt(conf_ref * conf_tmp)
+        # # conf_ref = F.softmax(self.coef_ref * dist, dim=-2)
+        # # conf_tmp = F.softmax(self.coef_temp * dist, dim=-1)
+        # # confidence = torch.sqrt(conf_ref * conf_tmp)
 
-        confidence = dist
+        # confidence = dist
 
-        conf_values, _ = torch.topk(confidence, k=self.k, dim=-1)
-        conf = conf_values.view(-1, m, n, self.k).permute(0, 3, 1, 2)
+        # conf_values, _ = torch.topk(confidence, k=self.k, dim=-1)
+        # conf = conf_values.view(-1, m, n, self.k).permute(0, 3, 1, 2)
         # k, 112, 112
+
+        conf = self.corr(fref_feat, ftem_feat)
 
         out1 = self.out_conv1(conf)  # B, 32, 112, 112
         out_cat = torch.cat((out1, fref_feat), dim=-3)  # B, 32+64, 112, 112

@@ -93,7 +93,7 @@ if __name__ == "__main__":
 
             # transform
             im_ot = CustomTransform(size=args.size)(im_orig_mask)
-            im_ft = CustomTransform(size=args.patch_size)(im_forge_mask)
+            im_ft = CustomTransform(size=args.size)(im_forge_mask)
 
             im_ref = im_ot.unsqueeze(0).to(device)
             im_t = im_ft.unsqueeze(0).to(device)
