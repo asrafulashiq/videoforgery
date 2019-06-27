@@ -11,6 +11,7 @@ import torch
 from torchvision import transforms
 from collections import defaultdict
 import utils
+from utils import CustomTransform
 
 
 def add_sorp(im, type="pepper"):
@@ -179,120 +180,120 @@ class Dataset_image:
                 other_tfm = utils.SimTransform(
                     size=(self.args.size, self.args.size))
             else:
-                other_tfm=None
+                other_tfm = None
 
             for i, cur_file in enumerate(filenames):
-                cur_data=data[cur_file]
-                mask_orig=cur_data["mask_orig"]
-                mask_new=cur_data["mask_new"]
-                offset=cur_data["offset"]
+                cur_data = data[cur_file]
+                mask_orig = cur_data["mask_orig"]
+                mask_new = cur_data["mask_new"]
+                offset = cur_data["offset"]
 
                 if mask_orig is not None and not flag:
-                    forge_time=[i, -1]
-                    gt_time=[i-offset, -1]
-                    flag=True
+                    forge_time = [i, -1]
+                    gt_time = [i-offset, -1]
+                    flag = True
 
                 if mask_orig is None and flag:
-                    gt_time[1]=i
-                    forge_time[1]=i - offset
+                    gt_time[1] = i
+                    forge_time[1] = i - offset
 
-                fname=os.path.join(self.im_mani_root, *cur_file.parts[-2:])
-                im=skimage.img_as_float32(io.imread(fname))
+                fname = os.path.join(self.im_mani_root, *cur_file.parts[-2:])
+                im = skimage.img_as_float32(io.imread(fname))
 
-                X[i]=cv2.resize(im, (self.args.size, self.args.size))
+                X[i] = cv2.resize(im, (self.args.size, self.args.size))
                 if mask_new is None:
-                    mask_new=np.zeros(
+                    mask_new = np.zeros(
                         (self.args.size, self.args.size), dtype=np.float32)
-                    mask_orig=np.zeros(
+                    mask_orig = np.zeros(
                         (self.args.size, self.args.size), dtype=np.float32)
-                Y_forge[i]=(cv2.resize(
+                Y_forge[i] = (cv2.resize(
                     mask_new.astype(np.float32), (self.args.size, self.args.size)) > 0.5)
-                Y_orig[i-offset]=(cv2.resize(mask_orig.astype(np.float32),
+                Y_orig[i-offset] = (cv2.resize(mask_orig.astype(np.float32),
                                                (self.args.size, self.args.size)) > 0.5)
 
             if forge_time is not None and forge_time[1] == -1:
-                forge_time[1]=i
-                gt_time[1]=i - offset
+                forge_time[1] = i
+                gt_time[1] = i - offset
             if to_tensor:
-                X, Y_forge=utils.custom_transform_images(X, Y_forge, size=self.args.size,
+                X, Y_forge = utils.custom_transform_images(X, Y_forge, size=self.args.size,
                                                            other_tfm=other_tfm)
-                _, Y_orig=utils.custom_transform_images(None, Y_orig, size=self.args.size,
+                _, Y_orig = utils.custom_transform_images(None, Y_orig, size=self.args.size,
                                                           other_tfm=other_tfm)
 
             yield X, Y_forge, forge_time, Y_orig, gt_time, name
 
     def load_videos_track(self, is_training=True, add_prev=True, is_shuffle=True):
 
-        idx=[]
+        idx = []
         if is_training:
-            idx=self.train_index
+            idx = self.train_index
         else:
-            idx=self.test_index
+            idx = self.test_index
 
         if is_shuffle:
             np.random.shuffle(idx)
 
         for cnt, _ind in enumerate(idx):
-            inf=self.data[_ind]
-            maxlen=len(inf["files"])
+            inf = self.data[_ind]
+            maxlen = len(inf["files"])
 
             if add_prev:
-                dim=4
+                dim = 4
             else:
-                dim=3
+                dim = 3
 
-            Im=torch.zeros(maxlen, dim, self.args.size, self.args.size)
-            GT=torch.zeros(maxlen, 1, self.args.size, self.args.size)
+            Im = torch.zeros(maxlen, dim, self.args.size, self.args.size)
+            GT = torch.zeros(maxlen, 1, self.args.size, self.args.size)
 
-            prev_mask=None
-            counter=1
+            prev_mask = None
+            counter = 1
 
             for i, (im_file, mask_file) in enumerate(inf["files"]):
-                im_file=str(im_file)
-                mask_file=str(mask_file)
+                im_file = str(im_file)
+                mask_file = str(mask_file)
                 try:
                     assert os.path.exists(mask_file)
                 except AssertionError:
                     continue
 
-                image, mask=self.__get_im(
+                image, mask = self.__get_im(
                     im_file, mask_file, do_transform=False)
 
                 if self.transform:
-                    image_t, mask_t=self.transform(image, mask)
+                    image_t, mask_t = self.transform(image, mask)
 
                 if add_prev and i == 0:
-                    prev_mask=torch.zeros(
+                    prev_mask = torch.zeros(
                         (1, self.args.size, self.args.size), dtype=torch.float32
                     )
 
                 if add_prev:
-                    Im[counter - 1]=torch.cat((image_t, prev_mask), 0)
+                    Im[counter - 1] = torch.cat((image_t, prev_mask), 0)
                 else:
-                    Im[counter - 1]=image_t
-                GT[counter - 1]=mask_t
+                    Im[counter - 1] = image_t
+                GT[counter - 1] = mask_t
 
                 if add_prev:
-                    prev_mask=self.randomize_mask(mask)
-                    _, prev_mask=self.transform(None, prev_mask)
+                    prev_mask = self.randomize_mask(mask)
+                    _, prev_mask = self.transform(None, prev_mask)
 
                 if counter % maxlen == 0:
                     yield Im, GT
-                    Im=torch.zeros(
+                    Im = torch.zeros(
                         maxlen, dim, self.args.size, self.args.size)
-                    GT=torch.zeros(maxlen, 1, self.args.size, self.args.size)
-                    counter=0
+                    GT = torch.zeros(maxlen, 1, self.args.size, self.args.size)
+                    counter = 0
                 counter += 1
 
     def load_data_with_src(self, batch=20, is_training=True, shuffle=True, with_boundary=False):
-        counter=0
-        X=torch.zeros((batch, 3, self.args.size,
+        counter = 0
+        X = torch.zeros((batch, 3, self.args.size,
                          self.args.size), dtype=torch.float32)
-        ysize=1
-        Y=torch.zeros((batch, ysize, self.args.size,
+        ysize = 1
+        Y = torch.zeros((batch, ysize, self.args.size,
                          self.args.size), dtype=torch.long)
 
-        Info=[]
+        Info = []
 
         if shuffle:
             np.random.shuffle(self.__im_file_with_src_copy)
@@ -301,45 +302,36 @@ class Dataset_image:
             if (is_training and i in self.train_index) or (
                 not is_training and i in self.test_index
             ):
-                tmp=self.__get_im(im_file, mask_file, with_src=True,
+                tmp = self.__get_im(im_file, mask_file, with_src=True,
                                     src_file=src_file)
-                X[counter]=tmp[0]
-                Y[counter]=tmp[1]
+                X[counter] = tmp[0]
+                Y[counter] = tmp[1]
                 Info.append((im_file, mask_file, src_file))
                 counter += 1
                 if counter % batch == 0:
-                    if torch.any(torch.isnan(Y)):
-                        import pdb
-                        pdb.set_trace()
-
                     yield X, Y, Info
-
-                    if torch.any(Y < 0):
-                        import pdb
-                        pdb.set_trace()
-
-                    X=torch.zeros(
+                    X = torch.zeros(
                         (batch, 3, self.args.size, self.args.size), dtype=torch.float32
                     )
-                    Y=torch.zeros(
+                    Y = torch.zeros(
                         (batch, ysize, self.args.size,
                          self.args.size), dtype=torch.long
                     )
-                    Info=[]
-                    counter=0
+                    Info = []
+                    counter = 0
 
     def load_data(self, batch=20, is_training=True, shuffle=True, with_boundary=False):
-        counter=0
-        X=torch.zeros((batch, 3, self.args.size,
+        counter = 0
+        X = torch.zeros((batch, 3, self.args.size,
                          self.args.size), dtype=torch.float32)
         if with_boundary:
-            ysize=2
+            ysize = 2
         else:
-            ysize=1
-        Y=torch.zeros((batch, ysize, self.args.size,
+            ysize = 1
+        Y = torch.zeros((batch, ysize, self.args.size,
                          self.args.size), dtype=torch.float32)
 
-        Info=[]
+        Info = []
 
         if shuffle:
             np.random.shuffle(self.__im_files_with_gt)
@@ -348,12 +340,12 @@ class Dataset_image:
             if (is_training and i in self.train_index) or (
                 not is_training and i in self.test_index
             ):
-                tmp=self.__get_im(im_file, mask_file,
+                tmp = self.__get_im(im_file, mask_file,
                                     with_boundary=with_boundary)
-                X[counter]=tmp[0]
-                Y[counter, 0]=tmp[1]
+                X[counter] = tmp[0]
+                Y[counter, 0] = tmp[1]
                 if with_boundary:
-                    Y[counter, 1]=tmp[2]
+                    Y[counter, 1] = tmp[2]
                 Info.append((im_file, mask_file))
                 counter += 1
                 if counter % batch == 0:
@@ -366,258 +358,245 @@ class Dataset_image:
                     if torch.any(Y < 0):
                         import pdb
                         pdb.set_trace()
-                    X=torch.zeros(
+                    X = torch.zeros(
                         (batch, 3, self.args.size, self.args.size), dtype=torch.float32
                     )
-                    Y=torch.zeros(
+                    Y = torch.zeros(
                         (batch, ysize, self.args.size,
                          self.args.size), dtype=torch.float32
                     )
-                    Info=[]
-                    counter=0
+                    Info = []
+                    counter = 0
 
     # def __len__(self):
     #     return len(self.__im_files_with_gt)
 
     def __get_im(self, im_file, mask_file, do_transform=True,
                  with_boundary=False, with_src=False, src_file=None):
-        image=io.imread(im_file)
-        image=skimage.img_as_float32(image)  # image in [0-1] range
+        image = io.imread(im_file)
+        image = skimage.img_as_float32(image)  # image in [0-1] range
 
-        _mask=skimage.img_as_float32(io.imread(mask_file))
+        _mask = skimage.img_as_float32(io.imread(mask_file))
 
         if len(_mask.shape) > 2:
-            ind=_mask[:, :, 2] > 0.5
+            ind = _mask[:, :, 2] > 0.5
 
-            mask=np.zeros(_mask.shape[:2], dtype=np.float32)
-            mask[ind]=1
+            mask = np.zeros(_mask.shape[:2], dtype=np.float32)
+            mask[ind] = 1
         else:
-            mask=_mask
+            mask = _mask
 
         if with_boundary:
-            boundary=get_boundary(mask)
+            boundary = get_boundary(mask)
 
         if with_src:
-            mask_src=np.zeros(mask.shape[:2], dtype=np.float32)
+            mask_src = np.zeros(mask.shape[:2], dtype=np.float32)
             if src_file is not None:
-                _mask_src=skimage.img_as_float32(io.imread(src_file))
-                mask_src[_mask_src[..., 0] > 0.5]=1
+                _mask_src = skimage.img_as_float32(io.imread(src_file))
+                mask_src[_mask_src[..., 0] > 0.5] = 1
 
-            mask_back=np.zeros(mask.shape[:2], dtype=np.float32)
-            mask_back[(mask == 0) & (mask_src == 0)]=1
+            mask_back = np.zeros(mask.shape[:2], dtype=np.float32)
+            mask_back[(mask == 0) & (mask_src == 0)] = 1
 
         if do_transform and self.transform is not None:
-            image, mask=self.transform(image, mask)
+            image, mask = self.transform(image, mask)
 
             if with_boundary:
-                _, boundary=self.transform(None, boundary)
+                _, boundary = self.transform(None, boundary)
             if with_src:
-                _, mask_src=self.transform(None, mask_src)
-                _, mask_back=self.transform(None, mask_back)
+                _, mask_src = self.transform(None, mask_src)
+                _, mask_back = self.transform(None, mask_back)
         if with_boundary:
             return image, mask, boundary
         elif with_src:
-            mask_all=torch.zeros(mask.shape, dtype=torch.long)
-            mask_all[mask > 0]=2
-            mask_all[mask_src > 0]=1
+            mask_all = torch.zeros(mask.shape, dtype=torch.long)
+            mask_all[mask > 0] = 2
+            mask_all[mask_src > 0] = 1
             return image, mask_all
         else:
             return image, mask
 
-    def load_triplet(self, num=10):
-        # randomly select one video and get frames (with labels)
-        while True:
-            name=np.random.choice(list(self.im_mani_root.iterdir()))
-            gt_file=os.path.join(str(self.gt_root), name.name + ".pkl")
-
-            with open(gt_file, "rb") as fp:
-                data=pickle.load(fp)
-
-            filenames=list(data.keys())
-
-            list_forged_ind=[]  # filename indices having forged part
-            for i, f in enumerate(filenames):
-                if data[f]["mask_orig"] is not None:
-                    list_forged_ind.append(i)
-            if list_forged_ind:
-                break
-
-        X_im=torch.empty(
-            num, 3, 3, self.args.size, self.args.size, dtype=torch.float32
-        )
-        X_ind=torch.empty(num, 2, dtype=torch.float32)
-
-        for i in range(num):
-            ind=np.random.choice(list_forged_ind)
-            cur_file=filenames[ind]
-            cur_data=data[cur_file]
-
-            mask_orig=cur_data["mask_orig"]
-            mask_new=cur_data["mask_new"]
-            offset=cur_data["offset"]
-            src_file=filenames[ind - offset]
-
-            # generate triplet: cur, im1 (with good match), im2 (random)
-            src_neg_ind=np.random.choice(
-                list(range(ind - offset))
-                + list(range(ind - offset + 1, len(filenames)))
-            )
-            src_neg_file=filenames[src_neg_ind]
-
-            #
-            fname=os.path.join(self.im_mani_root, *cur_file.parts[-2:])
-            im=skimage.img_as_float32(io.imread(fname))
-            im_mask_new=mask_new
-
-            im_t=self.image_with_mask(im, im_mask_new, type="foreground")
-            # im_t = add_sorp(im_t, type="salt")
-
-            src_fname=os.path.join(self.im_mani_root, *src_file.parts[-2:])
-            im_src_pos=skimage.img_as_float32(io.imread(src_fname))
-            ind_src_pos=(ind - offset) / len(filenames)
-
-            if data[src_file]["mask_new"] is not None:
-                _mask=data[src_file]["mask_new"]
-                im_src_pos=self.image_with_mask(
-                    im_src_pos, _mask, type="background")
-                # im_src_pos = add_sorp(im_src_pos, type="pepper")
-
-            neg_fname=os.path.join(
-                self.im_mani_root, *src_neg_file.parts[-2:])
-            im_src_neg=skimage.img_as_float32(io.imread(neg_fname))
-            ind_src_neg=src_neg_ind / len(filenames)
-
-            if data[src_neg_file]["mask_new"] is not None:
-                _mask=data[src_neg_file]["mask_new"]
-                im_src_neg=self.image_with_mask(
-                    im_src_neg, _mask, type="background")
-                # im_src_neg = add_sorp(im_src_neg, type="pepper")
-
-            if self.transform:
-                im_t=self.transform(im_t)
-                im_src_pos=self.transform(im_src_pos)
-                im_src_neg=self.transform(im_src_neg)
-
-            X_im[i, 0]=im_t
-            X_im[i, 1]=im_src_pos
-            X_im[i, 2]=im_src_neg
-
-            X_ind[i]=torch.tensor(
-                [ind_src_pos, ind_src_neg], dtype=torch.float32)
-        return X_im, X_ind
-
     def image_with_mask(self, im, mask, type="foreground"):
-        im=skimage.img_as_float32(im)
-        mask=skimage.img_as_float32(mask)
+        im = skimage.img_as_float32(im)
+        mask = skimage.img_as_float32(mask)
 
         if len(im.shape) > len(mask.shape):
-            mask=mask[..., None]
+            mask = mask[..., None]
 
         if type == "foreground":
-            im_masked=im * mask
+            im_masked = im * mask
         elif type == "background":
-            im_masked=im * (1 - mask)
+            im_masked = im * (1 - mask)
         elif type == "background-bbox":
-            xx, yy=np.nonzero(mask.squeeze())
-            x1, x2, y1, y2=np.min(xx), np.max(xx), np.min(yy), np.max(yy)
-            mask=np.ones(im.shape[:2], dtype=im.dtype)
-            mask[x1:x2, y1:y2]=0
-            im_masked=im * mask[..., None]
+            xx, yy = np.nonzero(mask.squeeze())
+            x1, x2, y1, y2 = np.min(xx), np.max(xx), np.min(yy), np.max(yy)
+            mask = np.ones(im.shape[:2], dtype=im.dtype)
+            mask[x1:x2, y1:y2] = 0
+            im_masked = im * mask[..., None]
         elif type == "foreground-bbox":
-            xx, yy=np.nonzero(mask.squeeze())
-            x1, x2, y1, y2=np.min(xx), np.max(xx), np.min(yy), np.max(yy)
-            mask=np.zeros(im.shape[:2], dtype=im.dtype)
-            mask[x1:x2, y1:y2]=1
-            im_masked=im * mask[..., None]
+            xx, yy = np.nonzero(mask.squeeze())
+            x1, x2, y1, y2 = np.min(xx), np.max(xx), np.min(yy), np.max(yy)
+            mask = np.zeros(im.shape[:2], dtype=im.dtype)
+            mask[x1:x2, y1:y2] = 1
+            im_masked = im * mask[..., None]
         return im_masked
 
     def get_search_from_video(self, first_only=True):
         # randomly select one video and get frames (with labels)
-        lists=list(self.im_mani_root.iterdir())
+        lists = list(self.im_mani_root.iterdir())
         np.random.shuffle(lists)
         for name in lists:
             # while True:
             #     name = np.random.choice(list(self.im_mani_root.iterdir()))
-            gt_file=os.path.join(str(self.gt_root), name.name + ".pkl")
+            gt_file = os.path.join(str(self.gt_root), name.name + ".pkl")
 
             with open(gt_file, "rb") as fp:
-                data=pickle.load(fp)
+                data = pickle.load(fp)
 
-            filenames=list(data.keys())
-            flag=False
+            filenames = list(data.keys())
+            flag = False
             for i, f in enumerate(filenames):
                 if data[f]["mask_orig"] is not None:
-                    flag=True
+                    flag = True
                     break
             if not flag:
                 continue
 
-            num=len(filenames)
+            num = len(filenames)
             # X_im = torch.empty(num, 3, self.args.size, self.args.size, dtype=torch.float32)
-            X_im=np.zeros(
+            X_im = np.zeros(
                 (num, self.args.size, self.args.size, 3), dtype=np.float32)
 
-            _first=False
-            X_ref=None
+            _first = False
+            X_ref = None
             for i in range(num):
-                ind=i
-                cur_file=filenames[ind]
-                cur_data=data[cur_file]
-                im_mask_new=cur_data["mask_new"]
+                ind = i
+                cur_file = filenames[ind]
+                cur_data = data[cur_file]
+                im_mask_new = cur_data["mask_new"]
 
-                fname=os.path.join(self.im_mani_root, *cur_file.parts[-2:])
-                im=skimage.img_as_float32(io.imread(fname))
+                fname = os.path.join(self.im_mani_root, *cur_file.parts[-2:])
+                im = skimage.img_as_float32(io.imread(fname))
 
                 if im_mask_new is not None:
                     if not _first:
-                        im_first=self.image_with_mask(
+                        im_first = self.image_with_mask(
                             im, im_mask_new, type="foreground-bbox"
                         )
-                        _first=True
-                        first_ind=i
-                        match_ind=i - cur_data["offset"]
-                        im_first=cv2.resize(
+                        _first = True
+                        first_ind = i
+                        match_ind = i - cur_data["offset"]
+                        im_first = cv2.resize(
                             im_first, (self.args.size, self.args.size)
                         )
 
                         # im_first = self.transform(im_first)
                     if not first_only:
                         if X_ref is None:
-                            X_ref=im_first[None, ...]
+                            X_ref = im_first[None, ...]
                         else:
-                            im_ref=self.image_with_mask(
+                            im_ref = self.image_with_mask(
                                 im, im_mask_new, type="foreground-bbox"
                             )
-                            im_ref=cv2.resize(
+                            im_ref = cv2.resize(
                                 im_ref, (self.args.size, self.args.size)
                             )
-                            X_ref=np.concatenate(
+                            X_ref = np.concatenate(
                                 (X_ref, im_ref[None, ...]), 0)
 
-                    im=self.image_with_mask(
+                    im = self.image_with_mask(
                         im, im_mask_new, type="background-bbox")
 
                 # if self.transform:
                 #     im = self.transform(im)
-                im=cv2.resize(im, (self.args.size, self.args.size))
-                X_im[i]=im
+                im = cv2.resize(im, (self.args.size, self.args.size))
+                X_im[i] = im
             yield X_im, X_ref, match_ind, first_ind
 
     def get_frames_from_video(self, do_transform=False,
                               is_test=False):
         # randomly select one video and get frames (with labels)
-        ind=np.random.choice(self.test_index)
-        name=self.data[ind]
+        ind = np.random.choice(self.test_index)
+        name = self.data[ind]
         print("Video ", name["name"])
         for im_file, mask_file in name["files"]:
             if Path(im_file).suffix == ".png":
-                im_file=str(im_file)
-                mask_file=str(mask_file)
+                im_file = str(im_file)
+                mask_file = str(mask_file)
                 try:
                     assert os.path.exists(mask_file)
                 except AssertionError:
                     continue
-            image, mask=self.__get_im(
+            image, mask = self.__get_im(
                 im_file, mask_file, do_transform=do_transform)
 
             yield image, mask
+
+    def load_data_template_match(self, to_tensor=True, is_training=True,
+                                 batch=None):
+        from matching import tools
+
+        for ret in self.load_videos_all(is_training=is_training,
+                                        to_tensor=False):
+            X, Y_forge, forge_time, Y_orig, gt_time, name = ret
+
+            forge_time = np.arange(forge_time[0], forge_time[1] + 1)
+            gt_time = np.arange(gt_time[0], gt_time[1] + 1)
+
+            if batch is None:
+                batch_size = len(forge_time)
+            else:
+                batch_size = min(self.args.batch_size, len(forge_time))
+                ind = np.arange(forge_time.size)
+                np.random.shuffle(ind)
+                forge_time = forge_time[ind]
+                gt_time = gt_time[ind]
+
+            Xref = np.zeros((batch_size, self.args.size, self.args.size, 3),
+                            dtype=np.float32)
+            Xtem = np.zeros((batch_size, self.args.patch_size, self.args.patch_size, 3),
+                            dtype=np.float32)
+            Ys = np.zeros((batch_size, self.args.size, self.args.size),
+                          dtype=np.float32)
+
+            for k in range(batch_size):
+                ind_forge = forge_time[k]
+                ind_orig = gt_time[k]
+
+                im_orig = X[ind_orig]
+                im_forge = X[ind_forge]
+
+                im_forge_mask = im_forge * Y_forge[ind_forge][..., None]
+                im_orig_mask = im_orig * (1 - Y_forge[ind_orig])[..., None]
+
+                bb_forge = tools.get_bbox(Y_forge[ind_forge] > 0.5)
+                # bb_orig = tools.get_bbox(Y_orig[ind_orig] > 0.5)
+                if bb_forge is not None:
+                    x, y, w, h = bb_forge
+                    im_f = im_forge_mask[y:y+h, x:x+w]
+                else:
+                    im_f = np.zeros(
+                        (self.args.patch_size, self.args.patch_size, 3),
+                        dtype=np.float32)
+                im_f = skimage.transform.resize(
+                    im_f, (self.args.patch_size, self.args.patch_size))
+                im_o = skimage.transform.resize(
+                    im_orig_mask, (self.args.size, self.args.size))
+
+                Xref[k] = im_o
+                Xtem[k] = im_f
+                Ys[k] = Y_orig[ind_orig] > 0.5
+            if to_tensor:
+                tfm_o = CustomTransform(self.args.size)
+                tfm_f = CustomTransform(self.args.patch_size)
+                Xreft = torch.zeros(
+                    batch_size, 3, self.args.size, self.args.size)
+                Xtemt = torch.zeros(
+                    batch_size, 3, self.args.patch_size, self.args.patch_size)
+                Yst = torch.zeros(
+                    batch_size, 1, self.args.size, self.args.size)
+                for k in range(batch_size):
+                    Xreft[k], Yst[k] = tfm_o(Xref[k], Ys[k])
+                    Xtemt[k] = tfm_f(Xtem[k])
+                Xref, Xtem, Ys = Xreft, Xtemt, Yst
+            yield Xref, Xtem, Ys

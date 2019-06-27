@@ -52,8 +52,7 @@ def arg_main():
     parser.add_argument("--epoch", type=int, default=20,
                         help="number of epoch")
 
-    parser.add_argument("--batch-size", "-b", type=int,
-                        default=20, help="batch size")
+
     parser.add_argument("--thres", type=float, default=0.5,
                         help="threshold for detection")
 
@@ -68,6 +67,7 @@ def arg_main():
 
 def arg_main_search():
     parser = arg_common()
+
     parser.add_argument("--model", type=str, default="comp", help="model name")
     parser.add_argument("--ckpt", type=str, default=None,
                         help="pretrained model path")
@@ -84,7 +84,8 @@ def arg_main_search():
                         default=20, help="batch size")
     parser.add_argument("--thres", type=float, default=0.5,
                         help="threshold for detection")
-
+    parser.add_argument("--batch-size", "-b", type=int,
+                        default=20, help="batch size")
     args = parser.parse_args()
     return args
 
@@ -108,7 +109,8 @@ def arg_main_track():
                         default=20, help="batch size")
     parser.add_argument("--thres", type=float, default=0.5,
                         help="threshold for detection")
-
+    parser.add_argument("--batch-size", "-b", type=int,
+                        default=20, help="batch size")
     args = parser.parse_args()
     return args
 
@@ -136,6 +138,34 @@ def arg_main_tcn():
                         help="threshold for detection")\
 
     parser.add_argument("--level", type=int, default=2, help="level of tcn")
+    parser.add_argument("--batch-size", "-b", type=int,
+                        default=20, help="batch size")
+    args = parser.parse_args()
+    return args
 
+
+def arg_main_match():
+    parser = arg_common()
+    parser.add_argument("--sep", type=int,
+                        default=4, help="")
+    parser.add_argument("--model", type=str,
+                        default="match", help="model name")
+    parser.add_argument("--ckpt", type=str, default=None,
+                        help="pretrained model path")
+    parser.add_argument(
+        "--test-path",
+        type=str,
+        default="./test_figs",
+        help="path to save sample test figures",
+    )
+    parser.add_argument("--epoch", type=int, default=100,
+                        help="number of epoch")
+
+    parser.add_argument("--thres", type=float, default=0.5,
+                        help="threshold for detection")
+    parser.add_argument("--patch-size", type=int, default=48)
+    # parser.add_argument("--size", type=int, default=240)
+    parser.add_argument("--batch-size", "-b", type=int,
+                        default=5, help="batch size")
     args = parser.parse_args()
     return args

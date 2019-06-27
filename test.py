@@ -17,7 +17,7 @@ from sklearn import metrics
 import utils
 from utils import MultiPagePdf, add_overlay
 from utils import CustomTransform
-
+from matching import tools
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -380,3 +380,26 @@ def plot_samples(preds, labels, args, info=None):
 
     pdf.final()
     print(f"{out_file_name} created")
+
+
+@torch.no_grad()
+def test_template_match(dataset, model, args, iteration, device,
+                        logger=None, num=None):
+    model.eval()
+    iou_all = []
+    for i, ret in enumerate(dataset.load_data_template_match(is_training=False,
+                                                to_tensor=True, batch=True)):
+        Xs, Xt, Ys = ret
+        Xs, Xt, Ys = Xs.to(device), Xt.to(device), Ys.to(device)
+
+        pred = model(Xs, Xt)
+
+        gt_mask = Ys.data.cpu().numpy()
+        pred_mask = torch.sigmoid(pred).data.cpu().numpy()
+
+        iou = tools.iou_mask(gt_mask, pred_mask)
+        print(f"\t{i}: {iou:.4f}")
+        iou_all.append(iou)
+        if num is not None and i >= num:
+            break
+    print(f"\nIoU: {np.mean(iou_all):.4f}")

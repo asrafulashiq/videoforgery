@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 from loss import *
+from skimage import io
 
 
 def train_tcn(inputs, labels, model, optimizer, args, iteration, device, logger=None,
@@ -29,7 +30,7 @@ def train_tcn(inputs, labels, model, optimizer, args, iteration, device, logger=
             fn_loss = BCE_loss
 
     loss_ = fn_loss(y, labels, with_weight=True)
-    
+
     if with_src:
         loss_f = loss_[0].data.cpu().numpy()
         loss_s = loss_[1].data.cpu().numpy()
@@ -46,7 +47,7 @@ def train_tcn(inputs, labels, model, optimizer, args, iteration, device, logger=
         print(f"Iteration: {iteration:4d} Loss : {loss_val:.4f}")
     else:
         print(f"Iteration: {iteration:4d} \t\t Loss : {loss_val:.4f}")
-    
+
     if with_src:
         print(f"\t loss_f: {loss_f:.4f}  loss_s:{loss_s:.4f}")
 
@@ -60,10 +61,8 @@ def train_tcn(inputs, labels, model, optimizer, args, iteration, device, logger=
                 logger.add_scalar("train_loss/total_src", loss_[1], iteration)
 
 
-
-
 def train_with_src(inputs, labels, model, optimizer, args, iteration, device, logger=None,
-          validate=False):
+                   validate=False):
 
     if validate:
         model.eval()
@@ -76,7 +75,7 @@ def train_with_src(inputs, labels, model, optimizer, args, iteration, device, lo
     # prediction
     y = model(inputs)
 
-    fn_loss =  Two_loss
+    fn_loss = Two_loss
 
     loss = fn_loss(y, labels)
 
@@ -138,9 +137,8 @@ def train(inputs, labels, model, optimizer, args, iteration, device, logger=None
             logger.add_scalar("train_loss/total", loss, iteration)
 
 
-
 def train_GAN(inputs, labels, model, optimizer, args, iteration, device, logger=None,
-         validate=False):
+              validate=False):
 
     generator, discriminator = model
 
@@ -181,7 +179,6 @@ def train_GAN(inputs, labels, model, optimizer, args, iteration, device, logger=
         loss_D.backward()
         optimizer_D.step()
 
-
     # Generator
     optimizer_G.zero_grad()
 
@@ -195,10 +192,9 @@ def train_GAN(inputs, labels, model, optimizer, args, iteration, device, logger=
         loss_G.backward()
         optimizer_G.step()
 
-
     if not validate:
         print(f"Iteration: {iteration:4d} Loss_G : {loss_G.data.cpu().numpy():.4f}" +
-            f" Loss_D : {loss_D.data.cpu().numpy():.4f}")
+              f" Loss_D : {loss_D.data.cpu().numpy():.4f}")
     else:
         print(f"Iteration: {iteration:4d} \t\t Loss_G : {loss_G.data.cpu().numpy():.4f}" +
               f" Loss_D : {loss_D.data.cpu().numpy():.4f}")
@@ -210,7 +206,6 @@ def train_GAN(inputs, labels, model, optimizer, args, iteration, device, logger=
         else:
             logger.add_scalar("train_loss/loss_G", loss_G, iteration)
             logger.add_scalar("train_loss/loss_D", loss_D, iteration)
-
 
 
 def train_with_boundary(
@@ -243,7 +238,6 @@ def train_with_boundary(
         # nn.utils.clip_grad_norm_(model.parameters(), args.clip)
         optimizer.step()
 
-
         print(
             f"Iteration: {iteration:4d}, loss_m : {loss_mask.data.cpu().numpy():.4f} "
             + f"loss_b : {loss_boundary.data.cpu().numpy():.4f} "
@@ -267,52 +261,21 @@ def train_with_boundary(
         logger.add_scalar(f"{pref}/boundary", loss_boundary, iteration)
 
 
-def train_with_src(ret, model, optimizer, args, iteration, device, logger=None,
-                   validate=False):
+def train_template_match(Xs, Xt, Y, model, optimizer, args, iteration, device,
+                         logger=None):
+    model.train()
+    Xs, Xt, Y = Xs.to(device), Xt.to(device), Y.to(device)
 
-    if validate:
-        model.eval()
-    else:
-        model.train()
+    pred = model(Xs, Xt)
 
-    X, Y_forge, forge_time, Y_orig, gt_time, name = ret
+    loss = BCE_loss(pred, Y, with_weight=True)
 
-    X = X.to(device)
-    X_f = X * Y_forge
-    X_nf = X * (1 - Y_forge)
-
-    ind_s, ind_m, ind_e = forge_time[0], forge_time[len(
-        forge_time)//2], forge_time[-1]
-    _len = len(forge_time)
-    X_ref = X_f[[ind_s, ind_m, ind_e]]
-
-    X_in = torch.zeros((X.shape[0]-_len, 18, *X.shape[-3:]), dtype=torch.float32)
-    for i in range(X.shape[0]-_len):
-        x_now = X_nf[[i, i+len(forge_time)//2, i+len(forge_time)]]
-        x1 = X_ref.reshape(-1, *X_ref.shape[-3])
-        x2 = x_now.reshape(-1, *X_ref.shape[-3])
-        X_in[i] = torch.cat(
-            (x1, x2), dim=0
-        )
-    
-    # prediction
-    y = model(X_in)
-
-    loss = fn_loss(y, labels)
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
 
     loss_val = loss.data.cpu().numpy()
-
-    if not validate:
-        optimizer.zero_grad()
-        loss.backward()
-        # nn.utils.clip_grad_norm_(model.parameters(), args.clip)
-        optimizer.step()
-        print(f"Iteration: {iteration:4d} Loss : {loss_val:.4f}")
-    else:
-        print(f"Iteration: {iteration:4d} \t\t Loss : {loss_val:.4f}")
+    print(f"{iteration}: loss {loss_val:.4f}")
 
     if logger is not None:
-        if validate:
-            logger.add_scalar("val_loss/total", loss, iteration)
-        else:
-            logger.add_scalar("train_loss/total", loss, iteration)
+        logger.add_scalar("train_loss/total", loss, iteration)
