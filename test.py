@@ -387,6 +387,7 @@ def test_template_match(dataset, model, args, iteration, device,
                         logger=None, num=None):
     model.eval()
     iou_all = []
+    Tscore = np.zeros(4)
     for i, ret in enumerate(dataset.load_data_template_match(is_training=False,
                                                 to_tensor=True, batch=True)):
         Xs, Xt, Ys = ret
@@ -397,9 +398,18 @@ def test_template_match(dataset, model, args, iteration, device,
         gt_mask = Ys.data.cpu().numpy()
         pred_mask = torch.sigmoid(pred).data.cpu().numpy()
 
-        iou = tools.iou_mask(gt_mask, pred_mask)
+        f_gt = gt_mask > 0.5
+        f_pred = pred_mask > args.thres
+        iou = tools.iou_mask(f_gt, f_pred)
         print(f"\t{i}: {iou:.4f}")
         iou_all.append(iou)
+
+        tt = utils.conf_mat(
+            f_gt.ravel(), f_pred.ravel()).ravel()
+        Tscore += np.array(tt)
+
         if num is not None and i >= num:
             break
+
     print(f"\nIoU: {np.mean(iou_all):.4f}")
+    print(f"F1 source: {utils.fscore(Tscore)}")

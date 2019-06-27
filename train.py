@@ -268,7 +268,9 @@ def train_template_match(Xs, Xt, Y, model, optimizer, args, iteration, device,
 
     pred = model(Xs, Xt)
 
-    loss = BCE_loss(pred, Y, with_weight=True)
+    loss = BCE_loss(pred, Y)
+    # loss = dice_loss(pred, Y)
+
 
     optimizer.zero_grad()
     loss.backward()

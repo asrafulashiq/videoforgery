@@ -54,7 +54,7 @@ if __name__ == "__main__":
 
     # model
 
-    model = tools.MatcherPair()
+    model = tools.MatcherPair(patch_size=args.patch_size)
     model.to(device)
 
     iteration = 1
@@ -85,7 +85,7 @@ if __name__ == "__main__":
                 iteration += 1
             
             test_template_match(dataset, model, args, iteration, device,
-                                logger=logger, num=None)
+                                logger=logger, num=10)
             torch.save(
                 {
                     "epoch": ep,

@@ -35,6 +35,8 @@ def conf_mat(labels, preds):
 
 class SimTransform():
     def __init__(self, size=(224, 224)):
+        if isinstance(size, int) or isinstance(size, float):
+            size = (size, size)
         # scale
         self.scale = np.random.choice(
             np.linspace(0.9, 1.5, 30)
@@ -59,12 +61,12 @@ class SimTransform():
     def __call__(self, im=None, mask=None):
         if im is not None:
             im = transform.warp(im, self.tfm)
-            im = transform.rotate(im, self.rot)
+            # im = transform.rotate(im, self.rot)
             if self.flip:
                 im = np.flip(im, 1).copy()
         if mask is not None:
             mask = transform.warp(mask, self.tfm)
-            mask = transform.rotate(mask, self.rot)
+            # mask = transform.rotate(mask, self.rot)
             if self.flip:
                 mask = np.flip(mask, 1).copy()
         return im, mask

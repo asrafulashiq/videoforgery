@@ -11,7 +11,7 @@ import torch
 from torchvision import transforms
 from collections import defaultdict
 import utils
-from utils import CustomTransform
+from utils import CustomTransform, SimTransform
 
 
 def add_sorp(im, type="pepper"):
@@ -554,10 +554,14 @@ class Dataset_image:
 
             Xref = np.zeros((batch_size, self.args.size, self.args.size, 3),
                             dtype=np.float32)
-            Xtem = np.zeros((batch_size, self.args.patch_size, self.args.patch_size, 3),
+            Xtem = np.zeros((batch_size, self.args.size, self.args.size, 3),
                             dtype=np.float32)
             Ys = np.zeros((batch_size, self.args.size, self.args.size),
                           dtype=np.float32)
+
+            if is_training:
+                Y_forge = skimage.util.random_noise(Y_forge, mode='s&p',
+                                                    salt_vs_pepper=0.3)
 
             for k in range(batch_size):
                 ind_forge = forge_time[k]
@@ -569,17 +573,17 @@ class Dataset_image:
                 im_forge_mask = im_forge * Y_forge[ind_forge][..., None]
                 im_orig_mask = im_orig * (1 - Y_forge[ind_orig])[..., None]
 
-                bb_forge = tools.get_bbox(Y_forge[ind_forge] > 0.5)
-                # bb_orig = tools.get_bbox(Y_orig[ind_orig] > 0.5)
-                if bb_forge is not None:
-                    x, y, w, h = bb_forge
-                    im_f = im_forge_mask[y:y+h, x:x+w]
-                else:
-                    im_f = np.zeros(
-                        (self.args.patch_size, self.args.patch_size, 3),
-                        dtype=np.float32)
+                # bb_forge = tools.get_bbox(Y_forge[ind_forge] > 0.5)
+                # # bb_orig = tools.get_bbox(Y_orig[ind_orig] > 0.5)
+                # if bb_forge is not None:
+                #     x, y, w, h = bb_forge
+                #     im_f = im_forge_mask[y:y+h, x:x+w]
+                # else:
+                #     im_f = np.zeros(
+                #         (self.args.patch_size, self.args.patch_size, 3),
+                #         dtype=np.float32)
                 im_f = skimage.transform.resize(
-                    im_f, (self.args.patch_size, self.args.patch_size))
+                    im_forge_mask, (self.args.size, self.args.size))
                 im_o = skimage.transform.resize(
                     im_orig_mask, (self.args.size, self.args.size))
 
@@ -588,15 +592,16 @@ class Dataset_image:
                 Ys[k] = Y_orig[ind_orig] > 0.5
             if to_tensor:
                 tfm_o = CustomTransform(self.args.size)
-                tfm_f = CustomTransform(self.args.patch_size)
+                tfm_f = CustomTransform(self.args.size)
+                other_tfm = SimTransform(size=self.args.size)
                 Xreft = torch.zeros(
                     batch_size, 3, self.args.size, self.args.size)
                 Xtemt = torch.zeros(
-                    batch_size, 3, self.args.patch_size, self.args.patch_size)
+                    batch_size, 3, self.args.size, self.args.size)
                 Yst = torch.zeros(
                     batch_size, 1, self.args.size, self.args.size)
                 for k in range(batch_size):
-                    Xreft[k], Yst[k] = tfm_o(Xref[k], Ys[k])
+                    Xreft[k], Yst[k] = tfm_o(Xref[k], Ys[k], other_tfm=other_tfm)
                     Xtemt[k] = tfm_f(Xtem[k])
                 Xref, Xtem, Ys = Xreft, Xtemt, Yst
             yield Xref, Xtem, Ys

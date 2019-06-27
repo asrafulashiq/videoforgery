@@ -11,6 +11,7 @@ from matplotlib import pyplot as plt
 from pathlib import Path
 import torch.nn.functional as F
 import skimage
+from skimage import io
 
 # custom module
 import config
@@ -64,14 +65,19 @@ if __name__ == "__main__":
         model.load_state_dict(checkpoint["model_state"])
 
     model.to(device)
+    model.eval()
 
+    cnt = 1
+
+    IOU = []
     for ret in dataset.load_videos_all(is_training=False, to_tensor=False):
         X, Y_forge, forge_time, Y_orig, gt_time, name = ret
 
         iou_all = []
         forge_time = np.arange(forge_time[0], forge_time[1] + 1)
         gt_time = np.arange(gt_time[0], gt_time[1] + 1)
-        print(f"{name}")
+        print(f"{cnt} : {name}")
+        cnt += 1
         print("-----------------")
         savepath = Path("tmp3") / name
         savepath.mkdir(parents=True, exist_ok=True)
@@ -85,20 +91,14 @@ if __name__ == "__main__":
             im_forge_mask = im_forge * Y_forge[ind_forge][..., None]
             im_orig_mask = im_orig * (1 - Y_forge[ind_orig])[..., None]
 
-            bb_forge = tools.get_bbox(Y_forge[ind_forge] > 0.5)
-            bb_orig = tools.get_bbox(Y_orig[ind_orig] > 0.5)
-
-            x, y, w, h = bb_forge
-            im_f = im_forge_mask[y:y+h, x:x+w]
-
             # transform
             im_ot = CustomTransform(size=args.size)(im_orig_mask)
-            im_ft = CustomTransform(size=args.patch_size)(im_f)
+            im_ft = CustomTransform(size=args.patch_size)(im_forge_mask)
 
             im_ref = im_ot.unsqueeze(0).to(device)
             im_t = im_ft.unsqueeze(0).to(device)
             with torch.no_grad():
-                map_o = model(im_ref, im_t)
+                map_o = torch.sigmoid(model(im_ref, im_t))
             map_o = map_o.squeeze()
 
             map_o = map_o.data.cpu().numpy()
@@ -110,13 +110,18 @@ if __name__ == "__main__":
 
             # draw
             imcopy = im_forge_mask
-            imsrc = utils.add_overlay(im_orig, Y_orig[ind_orig], map_o)
+            imsrc = utils.add_overlay(im_orig, Y_orig[ind_orig],
+                                      map_o>args.thres)
 
             fig, ax = plt.subplots(1, 3, figsize=(14, 8))
             ax[0].imshow(imcopy)
             ax[1].imshow(imsrc)
             ax[2].imshow(map_o, cmap='gray')
-            fname = savepath / f"{k}.png"`
+            fname = savepath / f"{k}.png"
             fig.savefig(fname)
             plt.close('all')
-        print("\n\t Iou Mean: ", np.mean(iou_all))
+        print("\n\tIou Mean: ", np.mean(iou_all))
+        IOU.append(np.mean(iou_all))
+    print("-------------")
+    print("Total: {:.4f}".format(np.mean(IOU)))
+    print("-------------")

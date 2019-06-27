@@ -19,24 +19,32 @@ class FeatureExtractor(nn.Module):
 
             self.feat1 = nn.Sequential(*list(features)[:2])
             self.feat2 = nn.Sequential(
-                *list(features)[2:16]
+                *list(features)[2:5]
             )
-        else:
-            features = list(models.resnet101(pretrained=True).children())
-            self.feat1 = nn.Sequential(*features[:3])
-            self.feat2 = nn.Sequential(
-                features[3],
-                features[4]
+            self.feat3 = nn.Sequential(
+                nn.Conv2d(64, 64, 1, 1),
+                nn.ReLU(),
+                nn.MaxPool2d(2, 2, padding=0),
+                nn.Dropout(0.3)
             )
+
+            self.feat3.apply(weights_init_normal)
+        # else:
+        #     features = list(models.resnet101(pretrained=True).children())
+        #     self.feat1 = nn.Sequential(*features[:3])
+        #     self.feat2 = nn.Sequential(
+        #         features[3],
+        #         features[4]
+        #     )
 
     def forward(self, x):
-        x1 = self.feat1(x)
-        x2 = self.feat2(x1)
-
-        x2 = F.interpolate(x2, size=x1.size()[-2:], mode='bicubic',
-                           align_corners=True)
-        x_feat = torch.cat((x1, x2), dim=-3)
-        return x_feat
+        x1 = self.feat1(x)  # 64, H, W
+        x2 = self.feat2(x1)  # 64, H / 2, W / 2
+        # x2 = F.interpolate(x2, size=x1.size()[-2:], mode='bicubic',
+        #                    align_corners=True)
+        # x3 = torch.cat((x1, x2), dim=-3)   
+        out = self.feat3(x2)  # 192, H/2, W/2
+        return out, x1  # x2 is low-level features
 
 
 class Normalizer(nn.Module):
@@ -68,57 +76,82 @@ class Normalizer(nn.Module):
 def weights_init_normal(m):
     classname = m.__class__.__name__
     if classname.find("Conv") != -1:
-        # torch.nn.init.kaiming_normal_(m.weight.data)
-        torch.nn.init.normal_(m.weight.data, 1.0/3, 0.02)
+        torch.nn.init.kaiming_normal_(m.weight.data)
+        # torch.nn.init.normal_(m.weight.data, 1.0/3, 0.02)
     elif classname.find("BatchNorm2d") != -1:
         torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
         torch.nn.init.constant_(m.bias.data, 0.0)
 
 
 class MatcherPair(nn.Module):
-    def __init__(self, in_channel=3, type='vgg'):
+    def __init__(self, in_channel=3, type='vgg', patch_size=(16, 16)):
         super().__init__()
         self.feature_extractor = FeatureExtractor(in_channel=in_channel,
                                                   type=type)
         self.normalizer = Normalizer()
-        self.coef_ref = nn.Parameter(torch.tensor(1, dtype=torch.float32))
-        self.coef_temp = nn.Parameter(torch.tensor(1, dtype=torch.float32))
+        # self.coef_ref = nn.Parameter(torch.tensor(10, dtype=torch.float32))
+        # self.coef_temp = nn.Parameter(torch.tensor(10, dtype=torch.float32))
 
-        self.k = 5
+        self.tem_pool = nn.Sequential(
+            nn.Conv2d(64, 64, 3, padding=1),
+            nn.ReLU(),
+            nn.AdaptiveMaxPool2d(patch_size) 
+        )
+
+        self.k = 10
         self.final = nn.Sequential(
-            nn.Conv2d(self.k, 8, 3, 1, padding=1),
+            nn.Conv2d(32+64, 1, 1),
+        )
+
+        self.out_conv1 = nn.Sequential(
+            nn.Conv2d(self.k, 32, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Conv2d(8, 8, 3, 1, padding=1),
+            nn.Dropout(0.2)
+        )
+
+        self.out_conv2 = nn.Sequential(
+            nn.ConvTranspose2d(32+64, 32, kernel_size=4, padding=1, stride=2),
             nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Conv2d(8, 1, kernel_size=1)
+            nn.Dropout(0.2)
         )
 
         self.final.apply(weights_init_normal)
+        self.out_conv1.apply(weights_init_normal)
+        self.out_conv2.apply(weights_init_normal)
+        self.tem_pool.apply(weights_init_normal)
 
     def forward(self, x_ref, x_template):
-        fref = self.feature_extractor(x_ref)
-        ftem = self.feature_extractor(x_template)
+        fref_feat, fref_low = self.feature_extractor(x_ref)  # C, 112, 112
+        ftem_feat, _ = self.feature_extractor(x_template)  # C, 112, 112
 
-        fref, ftem = self.normalizer(fref, ftem)
-        fref = F.interpolate(fref, scale_factor=0.5, mode='bilinear')
-        dist = torch.einsum('bcmn, bcpq -> bmnpq', (fref, ftem)) / 320
+        fref, ftem = self.normalizer(fref_feat, ftem_feat)
+
+        # downsample ftem to (12, 12)
+        ftem = self.tem_pool(ftem)
+
+        dist = torch.einsum('bcmn, bcpq -> bmnpq', (fref, ftem))
         _, m, n, p, q = dist.shape
         dist = dist.reshape(-1, m*n, p*q)
-        conf_ref = F.softmax(self.coef_ref * dist, dim=-2)
-        conf_tmp = F.softmax(self.coef_temp * dist, dim=-1)
 
-        confidence = torch.sqrt(conf_ref * conf_tmp)
+        # conf_ref = F.softmax(self.coef_ref * dist, dim=-2)
+        # conf_tmp = F.softmax(self.coef_temp * dist, dim=-1)
+        # confidence = torch.sqrt(conf_ref * conf_tmp)
+
+        confidence = dist
 
         conf_values, _ = torch.topk(confidence, k=self.k, dim=-1)
         conf = conf_values.view(-1, m, n, self.k).permute(0, 3, 1, 2)
+        # k, 112, 112
 
-        out = self.final(conf)  # B, 1, m, n
+        out1 = self.out_conv1(conf)  # B, 32, 112, 112
+        out_cat = torch.cat((out1, fref_feat), dim=-3)  # B, 32+64, 112, 112
+        out = self.out_conv2(out_cat)  # B, 32, 224, 224
+        out = F.interpolate(out, size=fref_low.shape[-2:], mode='bilinear',
+                            align_corners=True)
+        out = torch.cat((out, fref_low), dim=-3)  # B, 32+64, 224, 224
         # values = torch.mean(conf_values, dim=-1, keepdim=True)
         # values = values.reshape(-1, m, n, 1)
-        out = F.interpolate(out, size=x_ref.shape[-2:], mode='bicubic',
-                            align_corners=True)
+        out = self.final(out)
         return out
 
 
@@ -138,11 +171,9 @@ def IoU(r1, r2):
 
 
 def iou_mask(mask1, mask2):
-    mask1 = mask1 > 0
-    mask2 = mask2 > 0
 
-    intersection = np.logical_and(mask1, mask2)
-    union = np.logical_or(mask1, mask2)
+    intersection = np.sum(np.logical_and(mask1, mask2), axis=(-1, -2))
+    union = np.sum(np.logical_or(mask1, mask2), axis=(-1, -2))
     iou = intersection / (union + 1e-8)
     val = np.mean(iou)
     return val
