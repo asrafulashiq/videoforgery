@@ -208,7 +208,11 @@ def iou_mask(mask1, mask2):
     intersection = np.sum(np.logical_and(mask1, mask2), axis=(-1, -2))
     union = np.sum(np.logical_or(mask1, mask2), axis=(-1, -2))
     iou = intersection / (union + 1e-8)
-    val = np.mean(iou)
+    iou = iou[union > 1e-5]
+    if iou.size == 0:
+        val = 1
+    else:
+        val = np.mean(iou)
     return val
 
 
@@ -220,7 +224,11 @@ def iou_mask_with_ignore(mask_pred, mask_gt):
     union = np.sum((mask_gt > 0.5) | (mask_pred > 0.5) & ~ignore_mask,
                    axis=(-1, -2))
     iou = intersection / (union + 1e-8)
-    val = np.mean(iou)
+    iou = iou[union > 1e-5]
+    if iou.size == 0:
+        val = 1
+    else:
+        val = np.mean(iou)
     return val
 
 
@@ -385,7 +393,7 @@ class MatchUnet(nn.Module):
     def normalize(self, x):
         return x / torch.norm(x, p=2, dim=-3, keepdim=True)
 
-    def forward(self, x1, x2):
+    def forward(self, x1, x2, corr_only=False):
         enc1 = self.encode(x1)
         enc2 = self.encode(x2)
 
@@ -404,9 +412,13 @@ class MatchUnet(nn.Module):
         # D2 = dist.reshape(_, m*n, p, q)
 
         D = self.corr(feat1, feat2)  # B, h2, w2, h1, w1
+
         B, h2, w2, h1, w1 = D.shape
         D1 = D.view(B, h2 * w2, h1, w1)
         D2 = D.view(B, h2, w2, h1 * w1).permute(0, 3, 1, 2)
+
+        if corr_only:
+            return D1.reshape(B, h2*w2, -1).permute(0, 2, 1)
 
         out1 = self.decode(D1, enc1)
         out2 = self.decode(D2, enc2)

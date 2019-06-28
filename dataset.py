@@ -607,85 +607,123 @@ class Dataset_image:
                 Xref, Xtem, Ys = Xreft, Xtemt, Yst
             yield Xref, Xtem, Ys
 
+    def _load(self, ret, to_tensor=True, batch=None):
+        X, Y_forge, forge_time, Y_orig, gt_time, name = ret
+
+        forge_time = np.arange(forge_time[0], forge_time[1] + 1)
+        gt_time = np.arange(gt_time[0], gt_time[1] + 1)
+
+        if batch is None:
+            batch_size = len(forge_time)
+        else:
+            batch_size = min(self.args.batch_size, len(forge_time))
+            ind = np.arange(forge_time.size)
+            np.random.shuffle(ind)
+            forge_time = forge_time[ind]
+            gt_time = gt_time[ind]
+
+        Xref = np.zeros((batch_size, self.args.size, self.args.size, 3),
+                        dtype=np.float32)
+        Xtem = np.zeros((batch_size, self.args.size, self.args.size, 3),
+                        dtype=np.float32)
+        Yref = np.zeros((batch_size, self.args.size, self.args.size),
+                        dtype=np.float32)
+        Ytem = np.zeros((batch_size, self.args.size, self.args.size),
+                        dtype=np.float32)
+
+        for k in range(batch_size):
+            ind_forge = forge_time[k]
+            ind_orig = gt_time[k]
+
+            im_orig = X[ind_orig]
+            im_forge = X[ind_forge]
+
+            mask_ref = np.zeros(im_orig.shape[:-1], dtype=np.float32)
+            mask_tem = np.zeros(im_orig.shape[:-1], dtype=np.float32)
+
+            mask_ref[Y_forge[ind_orig] > 0.5] = 0.5
+            mask_ref[Y_orig[ind_orig] > 0.5] = 1
+
+            mask_tem[Y_forge[ind_forge] > 0.5] = 1
+            mask_tem[Y_orig[ind_forge] > 0.5] = 0.5
+
+            im_f = skimage.transform.resize(
+                im_forge, (self.args.size, self.args.size), order=2)
+            im_o = skimage.transform.resize(
+                im_orig, (self.args.size, self.args.size), order=2)
+            mask_ref = skimage.transform.resize(
+                mask_ref, (self.args.size, self.args.size), order=0)
+            mask_tem = skimage.transform.resize(
+                mask_tem, (self.args.size, self.args.size), order=0)
+
+            Xref[k] = im_o
+            Xtem[k] = im_f
+            Yref[k] = mask_ref
+            Ytem[k] = mask_tem
+
+        if to_tensor:
+            tfm_o = CustomTransform(self.args.size)
+            tfm_f = CustomTransform(self.args.size)
+            other_tfm = SimTransform(size=self.args.size)
+            Xreft = torch.zeros(
+                batch_size, 3, self.args.size, self.args.size)
+            Xtemt = torch.zeros(
+                batch_size, 3, self.args.size, self.args.size)
+            Yreft = torch.zeros(
+                batch_size, 1, self.args.size, self.args.size)
+            Ytemt = torch.zeros(
+                batch_size, 1, self.args.size, self.args.size)
+            for k in range(batch_size):
+                Xreft[k], Yreft[k] = tfm_o(
+                    Xref[k], Yref[k], other_tfm=other_tfm)
+                Xtemt[k], Ytemt[k] = tfm_f(Xtem[k], Ytem[k],
+                                           other_tfm=other_tfm)
+            Xref, Xtem, Yref, Ytem = Xreft, Xtemt, Yreft, Ytemt
+        return Xref, Xtem, Yref, Ytem, name
+
     def load_data_template_match_pair(self, to_tensor=True, is_training=True,
                                       batch=None):
         from matching import tools
 
-        for ret in self.load_videos_all(is_training=is_training,
-                                        to_tensor=False):
-            X, Y_forge, forge_time, Y_orig, gt_time, name = ret
+        loader = self.load_videos_all(is_training=is_training,
+                                      to_tensor=False)
+        while True:
+            try:
+                ret1 = next(loader)
+                ret2 = next(loader)
+            except StopIteration:
+                return
+            Xref1, Xtem1, Yref1, Ytem1, name1 = self._load(
+                ret1, to_tensor=to_tensor, batch=batch)
+            Xref2, Xtem2, Yref2, Ytem2, name2 = self._load(
+                ret2, to_tensor=to_tensor, batch=batch)
 
-            forge_time = np.arange(forge_time[0], forge_time[1] + 1)
-            gt_time = np.arange(gt_time[0], gt_time[1] + 1)
+            yield Xref1, Xtem1, Yref1, Ytem1, name1
 
-            if batch is None:
-                batch_size = len(forge_time)
-            else:
-                batch_size = min(self.args.batch_size, len(forge_time))
-                ind = np.arange(forge_time.size)
-                np.random.shuffle(ind)
-                forge_time = forge_time[ind]
-                gt_time = gt_time[ind]
+            yield Xref2, Xtem2, Yref2, Ytem2, name2
 
-            Xref = np.zeros((batch_size, self.args.size, self.args.size, 3),
-                            dtype=np.float32)
-            Xtem = np.zeros((batch_size, self.args.size, self.args.size, 3),
-                            dtype=np.float32)
-            Yref = np.zeros((batch_size, self.args.size, self.args.size),
-                            dtype=np.float32)
-            Ytem = np.zeros((batch_size, self.args.size, self.args.size),
-                            dtype=np.float32)
-
-            # if is_training:
-            #     Y_forge = skimage.util.random_noise(Y_forge, mode='s&p',
-            #                                         salt_vs_pepper=0.3)
-
-            for k in range(batch_size):
-                ind_forge = forge_time[k]
-                ind_orig = gt_time[k]
-
-                im_orig = X[ind_orig]
-                im_forge = X[ind_forge]
-
-                mask_ref = np.zeros(im_orig.shape[:-1], dtype=np.float32)
-                mask_tem = np.zeros(im_orig.shape[:-1], dtype=np.float32)
-
-                mask_ref[Y_forge[ind_orig] > 0.5] = 0.5
-                mask_ref[Y_orig[ind_orig] > 0.5] = 1
-
-                mask_tem[Y_forge[ind_forge] > 0.5] = 1
-                mask_tem[Y_orig[ind_forge] > 0.5] = 0.5
-
-                im_f = skimage.transform.resize(
-                    im_forge, (self.args.size, self.args.size), order=2)
-                im_o = skimage.transform.resize(
-                    im_orig, (self.args.size, self.args.size), order=2)
-                mask_ref = skimage.transform.resize(
-                    mask_ref, (self.args.size, self.args.size), order=0)
-                mask_tem = skimage.transform.resize(
-                    mask_tem, (self.args.size, self.args.size), order=0)
-
-                Xref[k] = im_o
-                Xtem[k] = im_f
-                Yref[k] = mask_ref
-                Ytem[k] = mask_tem
-
+            # mix both
             if to_tensor:
-                tfm_o = CustomTransform(self.args.size)
-                tfm_f = CustomTransform(self.args.size)
-                other_tfm = SimTransform(size=self.args.size)
-                Xreft = torch.zeros(
-                    batch_size, 3, self.args.size, self.args.size)
-                Xtemt = torch.zeros(
-                    batch_size, 3, self.args.size, self.args.size)
-                Yreft = torch.zeros(
-                    batch_size, 1, self.args.size, self.args.size)
-                Ytemt = torch.zeros(
-                    batch_size, 1, self.args.size, self.args.size)
-                for k in range(batch_size):
-                    Xreft[k], Yreft[k] = tfm_o(
-                        Xref[k], Yref[k], other_tfm=other_tfm)
-                    Xtemt[k], Ytemt[k] = tfm_f(Xtem[k], Ytem[k],
-                                             other_tfm=other_tfm)
-                Xref, Xtem, Yref, Ytem = Xreft, Xtemt, Yreft, Ytemt
-            yield Xref, Xtem, Yref, Ytem, name
+                lib = torch
+            else:
+                lib = np
+
+            ind2 = np.random.choice(np.arange(Xref2.shape[0]),
+                                    size=Xref1.shape[0])
+
+            Xtem_d = Xtem2[ind2]
+            Yref_d = lib.zeros_like(Yref1)
+            Ytem_d = lib.zeros_like(Yref1)
+            name = name1 + "_" + name2
+
+            yield Xref1, Xtem_d, Yref_d, Ytem_d, name
+
+            ind1 = np.random.choice(np.arange(Xref1.shape[0]),
+                                    size=Xref2.shape[0])
+
+            Xtem_d = Xtem1[ind1]
+            Yref_d = lib.zeros_like(Yref2)
+            Ytem_d = lib.zeros_like(Yref2)
+            name = name2 + "_" + name1
+
+            yield Xref2, Xtem_d, Yref_d, Ytem_d, name

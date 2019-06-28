@@ -300,25 +300,25 @@ def train_template_match_im(Xs, Xt, Ys, Yt, model, optimizer, args, iteration, d
 
     optimizer.zero_grad()
 
-    loss1 = BCE_loss_with_ignore(preds, Ys, with_weight=True)
-    loss2 = BCE_loss_with_ignore(predt, Yt, with_weight=True)
+    loss1 = BCE_loss_with_ignore(preds, Ys)
+    loss2 = BCE_loss_with_ignore(predt, Yt)
 
     loss = loss1 + loss2
 
-    # loss = dice_loss(pred, Y)
+    # loss_top = tri_loss_max(preds, Ys) + tri_loss_max(predt, Yt)
 
-    loss_top = tri_loss_max(preds, Ys) + tri_loss_max(predt, Yt)
+    # loss_all = loss + loss_top
+    # loss_all.backward()
 
-    loss_all = loss + loss_top
-    loss_all.backward()
+    loss.backward()
 
     optimizer.step()
 
     loss_val = loss.data.cpu().numpy()
     print(f"{iteration:5d}: loss     {loss_val:.4f}")
 
-    loss_val_t = loss_top.data.cpu().numpy()
-    print(f"{'':5s}: \t\t\tloss top {loss_val_t:.4f}")
+    # loss_val_t = loss_top.data.cpu().numpy()
+    # print(f"{'':5s}: \t\t\tloss top {loss_val_t:.4f}")
 
 
     if logger is not None:

@@ -351,7 +351,7 @@ class MultiPagePdf:
         self.total_im = total_im
         self.nrows = nrows
         self.ncols = ncols
-        self.figsize = figsize
+        self.figsize = tuple(figsize)
         self.out_name = out_name
 
         # create figure and axes
@@ -360,7 +360,7 @@ class MultiPagePdf:
         self.figs = []
         self.axes = []
 
-        for i in range(total_pages):
+        for _ in range(total_pages):
             f, a = plt.subplots(nrows, ncols)
 
             f.set_size_inches(figsize)
@@ -369,9 +369,9 @@ class MultiPagePdf:
 
         self.cnt_ax = 0
 
-    def plot_one(self, x):
+    def plot_one(self, x, *args, **kwargs):
         ax = self.axes[self.cnt_ax]
-        ax.imshow(x)  # prediction
+        ax.imshow(x, *args, **kwargs)  # prediction
         # ax.imshow(x[0])  # ground truth
 
         ax.set_xticks([])

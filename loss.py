@@ -91,6 +91,20 @@ def BCE_loss_with_ignore(y, labels, with_weight=False, with_logits=True):
     return bce_loss.float()
 
 
+def dice_loss_with_ignore(y, labels):
+    smooth = 1e-3
+    y = torch.sigmoid(y.view(-1))
+    lab = labels.view(-1)
+
+    wgt = torch.ones_like(lab)
+    wgt[(lab > 0.4) & (lab < 0.6)] = 0
+
+    numer = 2 * (y * lab * wgt).sum()
+    den = (y * wgt).sum() + (lab * wgt).sum()
+
+    return 1 - (numer + smooth) / (den + smooth)
+
+
 
 def BCE_loss_with_src(y, labels, with_weight=False, with_logits=True):
 

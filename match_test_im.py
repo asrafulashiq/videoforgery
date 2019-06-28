@@ -60,6 +60,7 @@ if __name__ == "__main__":
     iteration = 1
     init_ep = 0
 
+    args.ckpt = "./ckpt/immatch_unet_tmp_youtubetmp.pkl"
     if args.ckpt is not None:
         checkpoint = torch.load(args.ckpt)
         model.load_state_dict(checkpoint["model_state"])

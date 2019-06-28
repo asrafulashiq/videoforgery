@@ -17,7 +17,7 @@ import skimage
 # custom module
 import config
 from dataset import Dataset_image
-from utils import CustomTransform
+from utils import CustomTransform, MultiPagePdf
 from matching import tools
 
 from train import train_template_match_im
@@ -64,38 +64,49 @@ if __name__ == "__main__":
     iteration = 1
     init_ep = 0
 
+    args.ckpt = "./ckpt/immatch_unet_tmp_youtubetmp.pkl"
     if args.ckpt is not None:
         checkpoint = torch.load(args.ckpt)
         model.load_state_dict(checkpoint["model_state"])
 
     model.to(device)
 
-    model_params = filter(lambda p: p.requires_grad, model.parameters())
-    # optimizer
-    optimizer = torch.optim.Adam(model_params, lr=args.lr)
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
+    root = Path("tmp_affinity")
 
-    if args.test:
-        test_template_match_im(dataset, model, args, iteration, device,
-                            logger=logger, num=None)
-    else:
-        for ep in tqdm(range(init_ep, args.epoch)):
-            # train
-            for ret in dataset.load_data_template_match_pair(is_training=True, batch=True,
-                                                        to_tensor=True):
-                Xref, Xtem, Yref, Ytem, name = ret
-                train_template_match_im(Xref, Xtem, Yref, Ytem, model, optimizer, args,
-                                    iteration, device, logger=logger)
-                iteration += 1
-            
-            test_template_match_im(dataset, model, args, iteration, device,
-                                logger=logger, num=10)
-            torch.save(
-                {
-                    "epoch": ep,
-                    "model_state": model.state_dict(),
-                    "opt_state": optimizer.state_dict(),
-                },
-                "./ckpt/" + model_name + ".pkl",
-            )
-    logger.close()
+    for ret in dataset.load_videos_all(is_training=False,
+                                       shuffle=True, to_tensor=True):
+        X, Y_forge, forge_time, Y_orig, gt_time, name = ret
+
+        N = X.shape[0]
+        if N > 15:
+            ind = np.arange(0, N, 2)
+        print(name, " : ", N)
+
+        forge_time = np.arange(forge_time[0], forge_time[1]+1)
+        gt_time = np.arange(gt_time[0], gt_time[1]+1)
+
+        Data_corr = np.zeros((X.shape[0], X.shape[0], 400, 400))
+
+        path = root / name
+        path.mkdir(parents=True, exist_ok=True)
+
+        pdf = MultiPagePdf(total_im=N*N, out_name=str(path/"affinity.pdf"),
+                           nrows=N, ncols=N, figsize=(16, 16))
+
+        for i in range(N):
+            for j in range(N):
+                im1 = X[i]
+                im2 = X[j]
+
+                D_corr = model(im1.unsqueeze(
+                    0).cuda(), im2.unsqueeze(0).cuda(), corr_only=True)
+                D_corr = D_corr.squeeze()
+
+                D_corr = D_corr.data.cpu().numpy()
+
+                Data_corr[i, j] = D_corr
+
+                pdf.plot_one(D_corr, cmap='Blues')
+
+        pdf.final()
+        break
