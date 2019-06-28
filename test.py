@@ -413,3 +413,36 @@ def test_template_match(dataset, model, args, iteration, device,
 
     print(f"\nIoU: {np.mean(iou_all):.4f}")
     print(f"F1 source: {utils.fscore(Tscore)}")
+
+
+@torch.no_grad()
+def test_template_match_im(dataset, model, args, iteration, device,
+                        logger=None, num=None):
+    model.eval()
+    iou_all = []
+    # Tscore = np.zeros(4)
+    for i, ret in enumerate(dataset.load_data_template_match_pair(is_training=False,
+                                                             to_tensor=True, batch=True)):
+        Xs, Xt, Ys = ret
+        Xs, Xt, Ys = Xs.to(device), Xt.to(device), Ys.to(device)
+
+        pred = model(Xs, Xt)
+
+        gt_mask = Ys.data.cpu().numpy()
+        pred_mask = torch.sigmoid(pred).data.cpu().numpy()
+
+        f_gt = gt_mask
+        f_pred = pred_mask
+        iou = tools.iou_mask_with_ignore(f_pred, f_gt)
+        print(f"\t{i}: {iou:.4f}")
+        iou_all.append(iou)
+
+        # tt = utils.conf_mat(
+        #     (f_gt>0.5).ravel(), f_pred.ravel()).ravel()
+        # Tscore += np.array(tt)
+
+        if num is not None and i >= num:
+            break
+
+    print(f"\nIoU: {np.mean(iou_all):.4f}")
+    # print(f"F1 source: {utils.fscore(Tscore)}")

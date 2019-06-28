@@ -601,7 +601,90 @@ class Dataset_image:
                 Yst = torch.zeros(
                     batch_size, 1, self.args.size, self.args.size)
                 for k in range(batch_size):
-                    Xreft[k], Yst[k] = tfm_o(Xref[k], Ys[k], other_tfm=other_tfm)
+                    Xreft[k], Yst[k] = tfm_o(
+                        Xref[k], Ys[k], other_tfm=other_tfm)
                     Xtemt[k] = tfm_f(Xtem[k])
                 Xref, Xtem, Ys = Xreft, Xtemt, Yst
             yield Xref, Xtem, Ys
+
+    def load_data_template_match_pair(self, to_tensor=True, is_training=True,
+                                      batch=None):
+        from matching import tools
+
+        for ret in self.load_videos_all(is_training=is_training,
+                                        to_tensor=False):
+            X, Y_forge, forge_time, Y_orig, gt_time, name = ret
+
+            forge_time = np.arange(forge_time[0], forge_time[1] + 1)
+            gt_time = np.arange(gt_time[0], gt_time[1] + 1)
+
+            if batch is None:
+                batch_size = len(forge_time)
+            else:
+                batch_size = min(self.args.batch_size, len(forge_time))
+                ind = np.arange(forge_time.size)
+                np.random.shuffle(ind)
+                forge_time = forge_time[ind]
+                gt_time = gt_time[ind]
+
+            Xref = np.zeros((batch_size, self.args.size, self.args.size, 3),
+                            dtype=np.float32)
+            Xtem = np.zeros((batch_size, self.args.size, self.args.size, 3),
+                            dtype=np.float32)
+            Yref = np.zeros((batch_size, self.args.size, self.args.size),
+                            dtype=np.float32)
+            Ytem = np.zeros((batch_size, self.args.size, self.args.size),
+                            dtype=np.float32)
+
+            # if is_training:
+            #     Y_forge = skimage.util.random_noise(Y_forge, mode='s&p',
+            #                                         salt_vs_pepper=0.3)
+
+            for k in range(batch_size):
+                ind_forge = forge_time[k]
+                ind_orig = gt_time[k]
+
+                im_orig = X[ind_orig]
+                im_forge = X[ind_forge]
+
+                mask_ref = np.zeros(im_orig.shape[:-1], dtype=np.float32)
+                mask_tem = np.zeros(im_orig.shape[:-1], dtype=np.float32)
+
+                im_forge_mask = Y_forge[ind_forge]
+                im_orig_mask = (1 - Y_forge[ind_orig])[..., None]
+
+                mask_ref[Y_forge[ind_orig] > 0.5] = 0.5
+                mask_ref[Y_orig[ind_orig] > 0.5] = 1
+
+                mask_tem[Y_forge[ind_forge] > 0.5] = 1
+                mask_tem[Y_orig[ind_forge] > 0.5] = 0.5
+
+                im_f = skimage.transform.resize(
+                    im_forge, (self.args.size, self.args.size))
+                im_o = skimage.transform.resize(
+                    im_orig, (self.args.size, self.args.size))
+
+                Xref[k] = im_o
+                Xtem[k] = im_f
+                Yref[k] = mask_ref
+                Ytem[k] = mask_tem
+
+            if to_tensor:
+                tfm_o = CustomTransform(self.args.size)
+                tfm_f = CustomTransform(self.args.size)
+                other_tfm = SimTransform(size=self.args.size)
+                Xreft = torch.zeros(
+                    batch_size, 3, self.args.size, self.args.size)
+                Xtemt = torch.zeros(
+                    batch_size, 3, self.args.size, self.args.size)
+                Yreft = torch.zeros(
+                    batch_size, 1, self.args.size, self.args.size)
+                Ytemt = torch.zeros(
+                    batch_size, 1, self.args.size, self.args.size)
+                for k in range(batch_size):
+                    Xreft[k], Yreft[k] = tfm_o(
+                        Xref[k], Yref[k], other_tfm=other_tfm)
+                    Xtemt[k], Ytemt[k] = tfm_f(Xtem[k], Ytem[k],
+                                             other_tfm=other_tfm)
+                Xref, Xtem, Yref, Ytem = Xreft, Xtemt, Yreft, Ytemt
+            yield Xref, Xtem, Yref, Ytem

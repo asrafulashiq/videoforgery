@@ -285,3 +285,32 @@ def train_template_match(Xs, Xt, Y, model, optimizer, args, iteration, device,
 
     if logger is not None:
         logger.add_scalar("train_loss/total", loss, iteration)
+
+
+def train_template_match_im(Xs, Xt, Ys, Yt, model, optimizer, args, iteration, device,
+                         logger=None):
+    model.train()
+
+    # if iteration > 300:
+    #     model.set_bn_to_eval()
+
+    Xs, Xt, Ys, Yt = Xs.to(device), Xt.to(device), Ys.to(device), Yt.to(device)
+
+    preds, predt = model(Xs, Xt)
+
+    loss1 = BCE_loss_with_ignore(preds, Ys, with_weight=True)
+    loss2 = BCE_loss_with_ignore(predt, Yt, with_weight=True)
+
+    loss = loss1 + loss2
+
+    # loss = dice_loss(pred, Y)
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    loss_val = loss.data.cpu().numpy()
+    print(f"{iteration}: loss {loss_val:.4f}")
+
+    if logger is not None:
+        logger.add_scalar("train_loss/total", loss, iteration)

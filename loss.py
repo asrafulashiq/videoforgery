@@ -66,6 +66,32 @@ def BCE_loss(y, labels, with_weight=False, with_logits=True):
     return bce_loss.float()
 
 
+def BCE_loss_with_ignore(y, labels, with_weight=False, with_logits=True):
+    eps = 1e-8
+    y = y.contiguous().view(-1)
+    labels = labels.contiguous().view(-1)
+
+    _w = torch.sum(labels) / (labels.shape[0])
+
+    if not with_weight:
+        wgt = torch.ones_like(labels)
+    else:
+        wgt = labels * (1 - _w) + _w * (1 - labels)
+    wgt[(labels > 0.4) & (labels < 0.6)] = 0
+
+    if with_logits:
+        bce_loss = F.binary_cross_entropy_with_logits(y, labels, wgt)
+    else:
+        bce_loss = F.binary_cross_entropy(y, labels, wgt)
+
+    if torch.isnan(bce_loss) or bce_loss < 0:
+        import pdb
+        pdb.set_trace()
+
+    return bce_loss.float()
+
+
+
 def BCE_loss_with_src(y, labels, with_weight=False, with_logits=True):
 
     loss1 = BCE_loss(y[:, 0], labels[:, 0], with_weight=with_weight, with_logits=True)
