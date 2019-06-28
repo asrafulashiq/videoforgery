@@ -37,7 +37,10 @@ if __name__ == "__main__":
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
+
+    #! TEMPORARY
     args.videoset = 'tmp_youtube'
+
     # model name
     model_name = args.model + "_" + args.model_type + "_" + \
         args.videoset + args.suffix
@@ -80,7 +83,7 @@ if __name__ == "__main__":
             # train
             for ret in dataset.load_data_template_match_pair(is_training=True, batch=True,
                                                         to_tensor=True):
-                Xref, Xtem, Yref, Ytem = ret
+                Xref, Xtem, Yref, Ytem, _ = ret
                 train_template_match_im(Xref, Xtem, Yref, Ytem, model, optimizer, args,
                                     iteration, device, logger=logger)
                 iteration += 1

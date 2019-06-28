@@ -211,17 +211,17 @@ def iou_mask(mask1, mask2):
     val = np.mean(iou)
     return val
 
+
 def iou_mask_with_ignore(mask_pred, mask_gt):
     ignore_mask = (mask_gt > 0.45) & (mask_gt < 0.55)
 
     intersection = np.sum((mask_pred > 0.5) & (mask_gt > 0.5) & ~ignore_mask,
-                        axis=(-1, -2))
-    union = np.sum((mask_gt) | (mask_pred) & ~ignore_mask, axis=(-1, -2))
+                          axis=(-1, -2))
+    union = np.sum((mask_gt > 0.5) | (mask_pred > 0.5) & ~ignore_mask,
+                   axis=(-1, -2))
     iou = intersection / (union + 1e-8)
     val = np.mean(iou)
     return val
-
-
 
 
 def evaluate_iou(rect_gt, rect_pred):
@@ -256,7 +256,6 @@ def draw_rect(im, bbox, bbox2=None):
         x, y, w, h = [int(i) for i in bbox2]
         cv2.rectangle(im, (x, y), (x+w, y+h), (0, 1, 0), 2)
     return im
-
 
 
 def conv3x3(in_, out):
@@ -355,6 +354,8 @@ class MatchUnet(nn.Module):
         self.normalizer = Normalizer()
         self.pre_center.apply(weights_init_normal)
         self.final.apply(weights_init_normal)
+
+        self.match_bnorm = nn.BatchNorm2d(1)
         # self.k = 5
 
     def encode(self, x):
@@ -389,20 +390,48 @@ class MatchUnet(nn.Module):
         enc2 = self.encode(x2)
 
         feat1, feat2 = enc1[0], enc2[0]
-        
-        f1_norm = self.normalize(feat1)
-        f2_norm = self.normalize(feat2)
-        dist = torch.einsum('bcmn, bcpq -> bmnpq', (f1_norm, f2_norm))
-        _, m, n, p, q = dist.shape
-        # dist = dist.reshape(-1, m*n, p*q)
 
-        # conf_values, _ = torch.topk(dist, k=self.k, dim=-1)
-        # conf = conf_values.view(-1, m, n, self.k).permute(0, 3, 1, 2)
+        # f1_norm = self.normalize(feat1)
+        # f2_norm = self.normalize(feat2)
+        # dist = torch.einsum('bcmn, bcpq -> bmnpq', (f1_norm, f2_norm))
+        # _, m, n, p, q = dist.shape
+        # # dist = dist.reshape(-1, m*n, p*q)
 
-        D1 = dist.reshape(-1, m, n, p*q).permute(0, 3, 1, 2)
-        D2 = dist.reshape(_, m*n, p, q)
+        # # conf_values, _ = torch.topk(dist, k=self.k, dim=-1)
+        # # conf = conf_values.view(-1, m, n, self.k).permute(0, 3, 1, 2)
+
+        # D1 = dist.reshape(-1, m, n, p*q).permute(0, 3, 1, 2)
+        # D2 = dist.reshape(_, m*n, p, q)
+
+        D = self.corr(feat1, feat2)  # B, h2, w2, h1, w1
+        B, h2, w2, h1, w1 = D.shape
+        D1 = D.view(B, h2 * w2, h1, w1)
+        D2 = D.view(B, h2, w2, h1 * w1).permute(0, 3, 1, 2)
 
         out1 = self.decode(D1, enc1)
         out2 = self.decode(D2, enc2)
 
         return out1, out2
+
+    def corr(self, X, x):
+        B, C, H, W = X.shape
+        h, w = x.shape[-2:]
+        X = X.reshape(1, B*C, H, W)
+
+        x = x.reshape(B, C, h, 1, w, 1)
+        x = x.permute(0, 2, 4, 1, 3, 5).reshape(-1, C, 1, 1)
+
+        match_map = F.conv2d(
+            X, x, groups=B)  # 1, B * h * w, H, W
+        #match_map = F.interpolate(match_map, size=(H, W), mode='bilinear')
+        match_map = match_map.permute(1, 0, 2, 3)
+        match_map = self.match_bnorm(match_map)
+        match_map = match_map.squeeze(0).view(B, H, W, H, W)
+        return match_map
+
+    def set_bn_to_eval(self):
+        def fn(m):
+            classname = m.__class__.__name__
+            if classname.find('BatchNorm') != -1:
+                m.eval()
+        self.apply(fn)

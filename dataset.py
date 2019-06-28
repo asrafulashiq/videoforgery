@@ -650,9 +650,6 @@ class Dataset_image:
                 mask_ref = np.zeros(im_orig.shape[:-1], dtype=np.float32)
                 mask_tem = np.zeros(im_orig.shape[:-1], dtype=np.float32)
 
-                im_forge_mask = Y_forge[ind_forge]
-                im_orig_mask = (1 - Y_forge[ind_orig])[..., None]
-
                 mask_ref[Y_forge[ind_orig] > 0.5] = 0.5
                 mask_ref[Y_orig[ind_orig] > 0.5] = 1
 
@@ -660,9 +657,13 @@ class Dataset_image:
                 mask_tem[Y_orig[ind_forge] > 0.5] = 0.5
 
                 im_f = skimage.transform.resize(
-                    im_forge, (self.args.size, self.args.size))
+                    im_forge, (self.args.size, self.args.size), order=2)
                 im_o = skimage.transform.resize(
-                    im_orig, (self.args.size, self.args.size))
+                    im_orig, (self.args.size, self.args.size), order=2)
+                mask_ref = skimage.transform.resize(
+                    mask_ref, (self.args.size, self.args.size), order=0)
+                mask_tem = skimage.transform.resize(
+                    mask_tem, (self.args.size, self.args.size), order=0)
 
                 Xref[k] = im_o
                 Xtem[k] = im_f
@@ -687,4 +688,4 @@ class Dataset_image:
                     Xtemt[k], Ytemt[k] = tfm_f(Xtem[k], Ytem[k],
                                              other_tfm=other_tfm)
                 Xref, Xtem, Yref, Ytem = Xreft, Xtemt, Yreft, Ytemt
-            yield Xref, Xtem, Yref, Ytem
+            yield Xref, Xtem, Yref, Ytem, name

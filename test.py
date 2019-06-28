@@ -419,23 +419,34 @@ def test_template_match(dataset, model, args, iteration, device,
 def test_template_match_im(dataset, model, args, iteration, device,
                         logger=None, num=None):
     model.eval()
-    iou_all = []
+    iou_all_s = []
+    iou_all_t = []
     # Tscore = np.zeros(4)
     for i, ret in enumerate(dataset.load_data_template_match_pair(is_training=False,
                                                              to_tensor=True, batch=True)):
-        Xs, Xt, Ys = ret
-        Xs, Xt, Ys = Xs.to(device), Xt.to(device), Ys.to(device)
+        Xs, Xt, Ys, Yt, _ = ret
+        Xs, Xt, Ys, Yt = Xs.to(device), Xt.to(device), Ys.to(device),\
+            Yt.to(device)
 
-        pred = model(Xs, Xt)
+        preds, predt = model(Xs, Xt)
 
-        gt_mask = Ys.data.cpu().numpy()
-        pred_mask = torch.sigmoid(pred).data.cpu().numpy()
+        gt_mask_s = Ys.data.cpu().numpy()
+        pred_mask_s = torch.sigmoid(preds).data.cpu().numpy()
 
-        f_gt = gt_mask
-        f_pred = pred_mask
-        iou = tools.iou_mask_with_ignore(f_pred, f_gt)
-        print(f"\t{i}: {iou:.4f}")
-        iou_all.append(iou)
+        f_gt = gt_mask_s
+        f_pred = pred_mask_s
+        iou_s = tools.iou_mask_with_ignore(f_pred, f_gt)
+        iou_all_s.append(iou_s)
+
+        ####
+        gt_mask_t = Yt.data.cpu().numpy()
+        pred_mask_t = torch.sigmoid(predt).data.cpu().numpy()
+
+        f_gt = gt_mask_t
+        f_pred = pred_mask_t
+        iou_t = tools.iou_mask_with_ignore(f_pred, f_gt)
+        print(f"\t{i}: s: {iou_s:.4f}\t t:{iou_t:.4f}")
+        iou_all_t.append(iou_t)
 
         # tt = utils.conf_mat(
         #     (f_gt>0.5).ravel(), f_pred.ravel()).ravel()
@@ -444,5 +455,6 @@ def test_template_match_im(dataset, model, args, iteration, device,
         if num is not None and i >= num:
             break
 
-    print(f"\nIoU: {np.mean(iou_all):.4f}")
+    print(f"\nIoU_s: {np.mean(iou_all_s):.4f}")
+    print(f"\nIoU_t: {np.mean(iou_all_t):.4f}")
     # print(f"F1 source: {utils.fscore(Tscore)}")

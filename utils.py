@@ -226,15 +226,15 @@ def overlay_masks(m1, m2, alpha=0.5):
     return (M1, M2)
 
 
-def add_overlay(im, m1, m2=None, alpha=0.5):
+def add_overlay(im, m1, m2=None, alpha=0.5, c1=[0, 1, 0], c2=[1, 0, 0]):
     r, c = im.shape[:2]
 
     M1 = np.zeros((r, c, 3), dtype=np.float32)
     M2 = np.zeros((r, c, 3), dtype=np.float32)
 
     if m2 is not None:
-        M1[m1 > 0] = [0, 1, 0]
-        M2[m2 > 0] = [1, 0, 0]
+        M1[m1 > 0] = c1
+        M2[m2 > 0] = c2
         M = cv2.addWeighted(M1, alpha, M2, 1 - alpha, 0, None)
     else:
         M1[m1 > 0] = [0, 1, 0]

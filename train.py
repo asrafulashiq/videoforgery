@@ -291,8 +291,8 @@ def train_template_match_im(Xs, Xt, Ys, Yt, model, optimizer, args, iteration, d
                          logger=None):
     model.train()
 
-    # if iteration > 300:
-    #     model.set_bn_to_eval()
+    if iteration > 300:
+        model.set_bn_to_eval()
 
     Xs, Xt, Ys, Yt = Xs.to(device), Xt.to(device), Ys.to(device), Yt.to(device)
 
