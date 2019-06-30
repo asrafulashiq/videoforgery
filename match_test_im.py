@@ -31,7 +31,7 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
 
-    args = config.arg_main_match()
+    args = config.arg_main_im_match()
     print(args)
     # seed
     np.random.seed(args.seed)
@@ -54,22 +54,35 @@ if __name__ == "__main__":
 
     # model
 
-    model = tools.MatchUnet(im_size=args.size)
+    model = tools.MatchDeepLabV3p(im_size=args.size)
     model.to(device)
 
     iteration = 1
     init_ep = 0
 
-    args.ckpt = "./ckpt/immatch_unet_tmp_youtubetmp.pkl"
     if args.ckpt is not None:
         checkpoint = torch.load(args.ckpt)
         model.load_state_dict(checkpoint["model_state"])
 
     model.to(device)
-    model.eval()
+    # model.eval()
 
     cnt = 1
     IOU_all = []
+
+    cnt = 1
+    for ret in dataset.load_data_template_match_pair(is_training=False, batch=True,
+                                                     to_tensor=True):
+        Xref, Xtem, Yref, Ytem, name = ret
+        with torch.no_grad():
+            model(Xref.to(device), Xtem.to(device))
+        cnt += 1
+        if cnt > 10:
+            break
+
+    cnt = 1
+    model.eval() 
+
     for ret in dataset.load_data_template_match_pair(is_training=False, batch=True,
                                                      to_tensor=False):
         Xref, Xtem, Yref, Ytem, name = ret
@@ -79,6 +92,7 @@ if __name__ == "__main__":
         print("-----------------")
         savepath = Path("tmp3") / name
         savepath.mkdir(parents=True, exist_ok=True)
+
         for k in range(Xref.shape[0]):
             # transform
             im_orig = Xref[k]
@@ -100,11 +114,11 @@ if __name__ == "__main__":
             map_f = skimage.transform.resize(map_f, im_orig.shape[:2], order=0)
 
             iou_s = tools.iou_mask_with_ignore(map_o,
-                                               Yref[k])
+                                               Yref[k], thres=args.thres)
             print(f"\t{k}: iou source: {iou_s}")
 
             iou_f = tools.iou_mask_with_ignore(map_f,
-                                               Ytem[k])
+                                               Ytem[k], thres=args.thres)
             print(f"\t{k}: iou forge: {iou_f}\n")
             IOU.append([iou_s, iou_f])
             # draw
@@ -119,10 +133,10 @@ if __name__ == "__main__":
             ax[0, 0].imshow(imsrc)
             ax[1, 0].imshow(imtem)
 
-            imsrc = utils.add_overlay(im_orig, map_o > 0.5,
+            imsrc = utils.add_overlay(im_orig, map_o > args.thres,
                                       c1=[0, 0, 1])
 
-            imtem = utils.add_overlay(im_forge, map_f > 0.5,
+            imtem = utils.add_overlay(im_forge, map_f > args.thres,
                                       c1=[0, 0, 1])
             ax[0, 1].imshow(imsrc)
             ax[1, 1].imshow(imtem)

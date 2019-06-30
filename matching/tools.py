@@ -53,22 +53,22 @@ class Normalizer(nn.Module):
         super().__init__()
 
     def forward(self, x1, x2):
-        # B, C, h1, w1 = x1.shape
-        # B, C, h2, w2 = x2.shape
+        B, C, h1, w1 = x1.shape
+        B, C, h2, w2 = x2.shape
 
-        # x1 = x1.view(B, C, h1 * w1)
-        # x2 = x2.view(B, C, h2 * w2)
-        # x_c = torch.cat([x1, x2], dim=-1)
-        # mean = x_c.mean(dim=-1, keepdim=True)
-        # std = x_c.mean(dim=-1, keepdim=True)
+        x1 = x1.view(B, C, h1 * w1)
+        x2 = x2.view(B, C, h2 * w2)
+        x_c = torch.cat([x1, x2], dim=-1)
+        mean = x_c.mean(dim=-1, keepdim=True)
+        std = x_c.mean(dim=-1, keepdim=True)
 
-        # x1 = (x1 - mean) / (std + 1e-8)
-        # x2 = (x2 - mean) / (std + 1e-8)
+        x1 = (x1 - mean) / (std + 1e-8)
+        x2 = (x2 - mean) / (std + 1e-8)
 
-        # x1 = x1.view(B, C, h1, w1)
-        # x2 = x2.view(B, C, h2, w2)
-        x1 = x1 / (1e-8 + torch.norm(x1, p=2, dim=-3, keepdim=True))
-        x2 = x2 / (1e-8 + torch.norm(x2, p=2, dim=-3, keepdim=True))
+        x1 = x1.view(B, C, h1, w1)
+        x2 = x2.view(B, C, h2, w2)
+        # x1 = x1 / (1e-8 + torch.norm(x1, p=2, dim=-3, keepdim=True))
+        # x2 = x2 / (1e-8 + torch.norm(x2, p=2, dim=-3, keepdim=True))
 
         return x1, x2
 
@@ -216,12 +216,12 @@ def iou_mask(mask1, mask2):
     return val
 
 
-def iou_mask_with_ignore(mask_pred, mask_gt):
+def iou_mask_with_ignore(mask_pred, mask_gt, thres=0.5):
     ignore_mask = (mask_gt > 0.45) & (mask_gt < 0.55)
 
-    intersection = np.sum((mask_pred > 0.5) & (mask_gt > 0.5) & ~ignore_mask,
+    intersection = np.sum((mask_pred > thres) & (mask_gt > 0.5) & ~ignore_mask,
                           axis=(-1, -2))
-    union = np.sum((mask_gt > 0.5) | (mask_pred > 0.5) & ~ignore_mask,
+    union = np.sum((mask_gt > 0.5) | (mask_pred > thres) & ~ignore_mask,
                    axis=(-1, -2))
     iou = intersection / (union + 1e-8)
     iou = iou[union > 1e-5]
@@ -302,6 +302,146 @@ class DecoderBlock(nn.Module):
 
     def forward(self, x):
         return self.block(x)
+
+
+class CrossCorr(nn.Module):
+    def __init__(self, out_channel=100):
+        super().__init__()
+        self.bn = nn.BatchNorm2d(1)
+        self.k = out_channel
+
+    def forward(self, x1, x2):
+        B, C, h1, w1 = x1.shape
+        B, C, h2, w2 = x2.shape
+        x_corr = torch.bmm(
+            x1.permute(0, 2, 3, 1).view(B, h1 * w1, C),
+            x1.view(B, C, -1)
+        ) / C  # B, h1*w1, h2*w2
+        x_b = x_corr.reshape(B*h1*w1, 1, h2, w2)
+        x_b = self.bn(x_b)
+        out1 = x_b.reshape(B, h1, w1, h2 * w2).permute(0,
+                                                       3, 1, 2)  # B, h2*w2, h1, w1
+        out2 = x_b.reshape(B, h1 * w1, h2, w2)
+
+        out1, _ = torch.topk(out1, k=self.k, dim=-3)
+        out2, _ = torch.topk(out2, k=self.k, dim=-3)  # B, k, h, w
+
+        return out1, out2
+
+
+class MatchDeepLab(nn.Module):
+    def __init__(self, im_size=320):
+        super().__init__()
+        self.im_size = im_size
+        self.backbone = models.vgg16_bn(
+            pretrained=True).features[:24]  # 256, H/8, W/8
+        self.normalizer = Normalizer()
+        self.corr = CrossCorr(out_channel=100)
+        self.head = models.segmentation.deeplabv3.DeepLabHead(
+            100, num_classes=1)
+
+    def forward(self, x1, x2):
+        feat1 = self.backbone(x1)
+        feat2 = self.backbone(x2)
+        feat1, feat2 = self.normalizer(feat1, feat2)
+        xcorr1, xcorr2 = self.corr(feat1, feat2)
+        out1 = self.head(xcorr1)
+        out2 = self.head(xcorr2)
+        out1 = F.interpolate(out1, size=self.im_size, mode='bilinear')
+        out2 = F.interpolate(out2, size=self.im_size, mode='bilinear')
+        return out1, out2
+
+    def set_bn_to_eval(self):
+        def fn(m):
+            classname = m.__class__.__name__
+            if classname.find('BatchNorm') != -1:
+                m.eval()
+        self.apply(fn)
+
+
+class MatchDeepLabV3p(nn.Module):
+    def __init__(self, im_size=320):
+        super().__init__()
+        self.im_size = im_size
+        encoder = models.vgg16_bn(
+            pretrained=True).features[:24]  # 256, H/8, W/8
+        self.low_feat = encoder[:7]
+        self.high_feat = encoder[7:]
+        self.normalizer = Normalizer()
+        self.corr = CrossCorr(out_channel=100)
+        # self.head = models.segmentation.deeplabv3.DeepLabHead(
+        #     100, num_classes=1)
+        self.head1 = models.segmentation.deeplabv3.ASPP(in_channels=100,
+                                                        atrous_rates=[6, 12, 18])
+        self.low_conv = nn.Sequential(
+            nn.Conv2d(64, 48, 1),
+            nn.BatchNorm2d(48),
+            nn.ReLU()
+        )
+        self.head2 = nn.Sequential(
+            nn.Conv2d(256+48, 256, 3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(256),
+            nn.Conv2d(256, 1, 1)
+        )
+
+        # self.head1.apply(weights_init_normal)
+        self.head2.apply(weights_init_normal)
+        self.low_conv.apply(weights_init_normal)
+        self.corr.apply(weights_init_normal)
+
+    def forward(self, x1, x2):
+        low_feat1 = self.low_feat(x1)
+        low_feat2 = self.low_feat(x2)
+        feat1 = self.high_feat(low_feat1)
+        feat2 = self.high_feat(low_feat2)
+
+        # feat1, feat2 = self.normalizer(feat1, feat2)
+        xcorr1, xcorr2 = self.corr(feat1, feat2)
+
+        x_low1 = self.low_conv(low_feat1)
+        x_low2 = self.low_conv(low_feat2)
+
+        x_aspp1 = self.head1(xcorr1)
+        x_aspp2 = self.head1(xcorr2)
+
+        x1 = torch.cat((F.interpolate(x_aspp1, size=x_low1.shape[-2:]),
+                        x_low1), dim=1)
+        x2 = torch.cat((F.interpolate(x_aspp2, size=x_low2.shape[-2:]),
+                        x_low2), dim=1)
+
+        out1 = self.head2(x1)
+        out2 = self.head2(x2)
+        out1 = F.interpolate(out1, size=self.im_size, mode='bilinear')
+        out2 = F.interpolate(out2, size=self.im_size, mode='bilinear')
+        return out1, out2
+
+    def set_bn_to_eval(self):
+        def fn(m):
+            classname = m.__class__.__name__
+            if classname.find('BatchNorm') != -1:
+                m.eval()
+        self.apply(fn)
+    
+    def get_1x_lr_params(self):
+        modules = [self.low_feat, self.high_feat]
+        for i in range(len(modules)):
+            for m in modules[i].named_modules():
+                if isinstance(m[1], nn.Conv2d) or isinstance(m[1], SynchronizedBatchNorm2d) \
+                        or isinstance(m[1], nn.BatchNorm2d):
+                    for p in m[1].parameters():
+                        if p.requires_grad:
+                            yield p
+
+    def get_10x_lr_params(self):
+        modules = [self.corr, self.head1, self.head2, self.low_conv]
+        for i in range(len(modules)):
+            for m in modules[i].named_modules():
+                if isinstance(m[1], nn.Conv2d) or isinstance(m[1], SynchronizedBatchNorm2d) \
+                        or isinstance(m[1], nn.BatchNorm2d):
+                    for p in m[1].parameters():
+                        if p.requires_grad:
+                            yield p
 
 
 class MatchUnet(nn.Module):

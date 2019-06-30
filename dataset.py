@@ -143,6 +143,14 @@ class Dataset_image:
                 (iv, fp, fmask, forig)
             )
 
+
+        self.__im_file_with_src_copy = []
+        for fp in Dict:
+            iv, fmask, forig = Dict[fp]
+            self.__im_file_with_src_copy.append(
+                (iv, fp, fmask, forig)
+            )
+
     def load_videos_all(self, is_training=False, shuffle=True, to_tensor=True):
         if is_training:
             idx = self.train_index
@@ -605,7 +613,7 @@ class Dataset_image:
                         Xref[k], Ys[k], other_tfm=other_tfm)
                     Xtemt[k] = tfm_f(Xtem[k])
                 Xref, Xtem, Ys = Xreft, Xtemt, Yst
-            yield Xref, Xtem, Ys
+            yield Xref, Xtem, Ys, name
 
     def _load(self, ret, to_tensor=True, batch=None):
         X, Y_forge, forge_time, Y_orig, gt_time, name = ret
@@ -684,6 +692,22 @@ class Dataset_image:
     def load_data_template_match_pair(self, to_tensor=True, is_training=True,
                                       batch=None):
         from matching import tools
+        import copy
+
+        def mixer(in1, in2, lib):
+            if lib == np:
+                fn_cat = np.concatenate
+            else:
+                fn_cat = torch.cat
+            Xref1, Xtem1, Yref1, Ytem1, name1 = in1
+            Xref2, Xtem2, Yref2, Ytem2, name2 = in2
+            Xref = fn_cat((Xref1, Xref2), 0)
+            Xtem = fn_cat((Xtem1, Xtem2), 0)
+            Yref = fn_cat((Yref1, Yref2), 0)
+            Ytem = fn_cat((Ytem1, Ytem2), 0)
+            name = name1 + "_" + name2
+            return Xref, Xtem, Yref, Ytem, name
+
 
         loader = self.load_videos_all(is_training=is_training,
                                       to_tensor=False)
@@ -698,32 +722,38 @@ class Dataset_image:
             Xref2, Xtem2, Yref2, Ytem2, name2 = self._load(
                 ret2, to_tensor=to_tensor, batch=batch)
 
-            yield Xref1, Xtem1, Yref1, Ytem1, name1
+            dat1 =  Xref1, Xtem1, Yref1, Ytem1, name1
 
-            yield Xref2, Xtem2, Yref2, Ytem2, name2
+            dat2 =  Xref2, Xtem2, Yref2, Ytem2, name2
+            
+            yield dat1
+            yield dat2
 
             # mix both
-            if to_tensor:
-                lib = torch
-            else:
-                lib = np
+            # if to_tensor:
+            #     lib = torch
+            # else:
+            #     lib = np
 
-            ind2 = np.random.choice(np.arange(Xref2.shape[0]),
-                                    size=Xref1.shape[0])
+            # ind2 = np.random.choice(np.arange(Xref2.shape[0]),
+            #                         size=Xref1.shape[0])
 
-            Xtem_d = Xtem2[ind2]
-            Yref_d = lib.zeros_like(Yref1)
-            Ytem_d = lib.zeros_like(Yref1)
-            name = name1 + "_" + name2
+            # Xtem_d = copy.deepcopy(Xtem2[ind2])
+            # Yref_d = lib.zeros_like(Yref1)
+            # Ytem_d = lib.zeros_like(Yref1)
+            # name = name1 + "_" + name2
 
-            yield Xref1, Xtem_d, Yref_d, Ytem_d, name
+            # dat3 = Xref1, Xtem_d, Yref_d, Ytem_d, name
 
-            ind1 = np.random.choice(np.arange(Xref1.shape[0]),
-                                    size=Xref2.shape[0])
+            # ind1 = np.random.choice(np.arange(Xref1.shape[0]),
+            #                         size=Xref2.shape[0])
 
-            Xtem_d = Xtem1[ind1]
-            Yref_d = lib.zeros_like(Yref2)
-            Ytem_d = lib.zeros_like(Yref2)
-            name = name2 + "_" + name1
+            # Xtem_d = copy.deepcopy(Xtem1[ind1])
+            # Yref_d = lib.zeros_like(Yref2)
+            # Ytem_d = lib.zeros_like(Yref2)
+            # name = name2 + "_" + name1
 
-            yield Xref2, Xtem_d, Yref_d, Ytem_d, name
+            # dat4 = Xref2, Xtem_d, Yref_d, Ytem_d, name
+
+            # yield mixer(dat1, dat3, lib)
+            # yield mixer(dat2, dat4, lib)

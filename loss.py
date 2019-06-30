@@ -47,7 +47,6 @@ def BCE_loss(y, labels, with_weight=False, with_logits=True):
 
     _w = torch.sum(labels) / (labels.shape[0])
 
-
     if not with_weight:
         wgt=None
     else:
@@ -92,7 +91,7 @@ def BCE_loss_with_ignore(y, labels, with_weight=False, with_logits=True):
 
 
 def dice_loss_with_ignore(y, labels):
-    smooth = 1e-3
+    smooth = 10
     y = torch.sigmoid(y.view(-1))
     lab = labels.view(-1)
 

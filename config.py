@@ -7,7 +7,7 @@ def arg_common():
         description="Argument for forgery detection")
 
     parser.add_argument(
-        "--videoset", "-v", type=str, default="youtube", help="video dataset name"
+        "--videoset", "-v", type=str, default="tmp_youtube", help="video dataset name"
     )
     parser.add_argument(
         "--root", type=str, default="~/dataset/video_forge/", help="root folder for dataset"

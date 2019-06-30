@@ -1,5 +1,6 @@
 from pathlib import Path
-import os, sys
+import os
+import sys
 import pickle
 import cv2
 import skimage
@@ -12,6 +13,7 @@ from pycocotools.coco import COCO
 
 import utils
 import config
+
 
 class COCODataset:
     def __init__(self, args=None, transform=None):
@@ -41,7 +43,8 @@ class COCODataset:
             imDir = self.test_im_folder
 
         counter = 0
-        X = torch.zeros((batch, 3, self.args.size, self.args.size), dtype=torch.float32)
+        X = torch.zeros((batch, 3, self.args.size,
+                         self.args.size), dtype=torch.float32)
         if with_boundary:
             ysize = 2
         else:
@@ -92,13 +95,79 @@ class COCODataset:
                 Info = []
                 counter = 0
 
-    def blend_ims(self, id1, id2, coco, imDir):
+    def load_data_template_match_pair(self, batch=None, is_training=True,
+                                      to_tensor=True, shuffle=True):
+        if is_training:
+            annFile = self.train_ann_file
+            imDir = self.train_im_folder
+        else:
+            annFile = self.test_ann_file
+            imDir = self.test_im_folder
+
+        if batch is None or batch is True:
+            batch = self.args.batch_size
+
+        counter = 0
+        ysize = 1
+        Xs = torch.zeros((batch, 3, self.args.size,
+                          self.args.size), dtype=torch.float32)
+        Ys = torch.zeros((batch, ysize, self.args.size, self.args.size),
+                         dtype=torch.float32)
+        Xf = torch.zeros((batch, 3, self.args.size,
+                          self.args.size), dtype=torch.float32)
+        Yf = torch.zeros((batch, ysize, self.args.size, self.args.size),
+                         dtype=torch.float32)
+
+        coco = COCO(annFile)
+        imids = coco.getImgIds()
+
+        if shuffle:
+            np.random.shuffle(imids)
+        Info = []
+
+        for _id in imids:
+            id_dest = _id
+            id_source = np.random.choice(imids)
+
+            try:
+                image_f, mask_f, image_s, mask_s = self.blend_ims(id_source, id_dest, coco, imDir,
+                                                                  return_src=True)
+
+                image_f, mask_f = self.transform(image_f, mask_f)
+                image_s, mask_s = self.transform(image_s, mask_s)
+
+                Xf[counter] = image_f
+                Yf[counter] = mask_f
+                Xs[counter] = image_s
+                Ys[counter] = mask_s
+                # if with_boundary:
+                #     Y[counter, 1] = tmp[2]
+                Info.append((id_source, id_dest))
+            except cv2.error:
+                continue
+            except ValueError:
+                continue
+            counter += 1
+            if counter % batch == 0:
+                yield Xs, Xf, Ys, Yf, Info
+                Xs = torch.zeros((batch, 3, self.args.size,
+                                  self.args.size), dtype=torch.float32)
+                Ys = torch.zeros((batch, ysize, self.args.size, self.args.size),
+                                 dtype=torch.float32)
+                Xf = torch.zeros((batch, 3, self.args.size,
+                                  self.args.size), dtype=torch.float32)
+                Yf = torch.zeros((batch, ysize, self.args.size, self.args.size),
+                                 dtype=torch.float32)
+                Info = []
+                counter = 0
+
+    def blend_ims(self, id1, id2, coco, imDir, return_src=False):
         im1, mask1 = self.__get_im(id1, coco, imDir)
         im2, mask2 = self.__get_im(id2, coco, imDir)
 
         # get random centroid, translate, scale
         centroid = np.array([np.random.choice(im1.shape[1]),
-                            np.random.choice(im1.shape[0])])
+                             np.random.choice(im1.shape[0])])
         centroid_orig, mask_orig_bb = self.get_centroid_from_mask(mask1)
 
         if centroid_orig is None:
@@ -112,9 +181,12 @@ class COCODataset:
         im_s_masked = mask1[..., None] * im1
 
         im_s_n = utils.patch_transform(im_s_masked, mask_orig_bb,
-                                        centroid, translate, scale)
+                                       centroid, translate, scale)
         im_mani = utils.splice(im2, im_s_n, im_mask_new)
-        return im_mani, im_mask_new
+        if return_src:
+            return im_mani, im_mask_new, im1, mask1
+        else:
+            return im_mani, im_mask_new
 
     @staticmethod
     def get_centroid_from_mask(mask):
@@ -143,17 +215,26 @@ class COCODataset:
             if not anns:
                 raise ValueError
             np.random.shuffle(anns)
+            annlist = []
             for annid in anns:
                 ann = coco.loadAnns([annid])[0]
                 mask = coco.annToMask(ann)
                 mask = cv2.resize(mask, (self.args.size, self.args.size))
-                mask = (mask > 0).astype(np.float32)
-                if np.sum(mask) / (mask.shape[0] * mask.shape[1]) < 0.02:
-                    continue
+                mask = (mask > 0)
+                # if np.sum(mask) / (mask.shape[0] * mask.shape[1]) < 0.02:
+                #     continue
+                annlist.append((annid, np.sum(mask)))
+
+            max_ann_id = max(annlist, key=lambda x: x[1])
+            ann = coco.loadAnns([max_ann_id[0]])[0]
+            mask = coco.annToMask(ann)
+            mask = cv2.resize(mask, (self.args.size, self.args.size))
+            mask = (mask > 0).astype(np.float32)
         except ValueError:
             mask = np.zeros(img.shape[:2], dtype=np.float32)
 
         return img, mask
+
 
 if __name__ == '__main__':
 

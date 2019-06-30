@@ -289,10 +289,11 @@ def train_template_match(Xs, Xt, Y, model, optimizer, args, iteration, device,
 
 def train_template_match_im(Xs, Xt, Ys, Yt, model, optimizer, args, iteration, device,
                          logger=None):
-    model.train()
+    module = model.module if isinstance(model, nn.DataParallel) else model
+    module.train()
 
     if iteration > 300:
-        model.set_bn_to_eval()
+        module.set_bn_to_eval()
 
     Xs, Xt, Ys, Yt = Xs.to(device), Xt.to(device), Ys.to(device), Yt.to(device)
 
@@ -300,8 +301,8 @@ def train_template_match_im(Xs, Xt, Ys, Yt, model, optimizer, args, iteration, d
 
     optimizer.zero_grad()
 
-    loss1 = BCE_loss_with_ignore(preds, Ys)
-    loss2 = BCE_loss_with_ignore(predt, Yt)
+    loss1 = BCE_loss_with_ignore(preds, Ys, with_weight=True)
+    loss2 = BCE_loss_with_ignore(predt, Yt, with_weight=True)
 
     loss = loss1 + loss2
 
