@@ -59,6 +59,9 @@ if __name__ == "__main__":
 
     iteration = 1
     init_ep = 0
+    
+    #! TMP
+    args.ckpt = './ckpt/immatch_unet_tmp_youtube_dlabv3_after_aspp.pkl'
 
     if args.ckpt is not None:
         checkpoint = torch.load(args.ckpt)
@@ -70,7 +73,7 @@ if __name__ == "__main__":
     cnt = 1
     IOU_all = []
 
-    cnt = 1
+    # cnt = 1
     # for ret in dataset.load_data_template_match_pair(is_training=True, batch=True,
     #                                                  to_tensor=True):
     #     Xref, Xtem, Yref, Ytem, name = ret
@@ -90,15 +93,19 @@ if __name__ == "__main__":
         print(f"{cnt} : {name}")
         cnt += 1
         print("-----------------")
-        savepath = Path("tmp3") / name
+        savepath = Path("tmp3_exp") / name
         savepath.mkdir(parents=True, exist_ok=True)
 
+        Xref = (Xref * (1 - (Yref == 0.5))[..., None]).astype(Xref.dtype)
+        Xtem = (Xtem * (Ytem == 1)[..., None]).astype(Xref.dtype)
+
         with torch.no_grad():
-            Xrt, _ = utils.custom_transform_images(images=Xref,
+            Xrt, Yrt = utils.custom_transform_images(images=Xref,
                                                      masks=Yref, size=args.size)
-            Xft, _ = utils.custom_transform_images(
+            Xft, Yft = utils.custom_transform_images(
                 images=Xtem, masks=Ytem, size=args.size)
             pred_r, pred_f = model(Xrt.to(device), Xft.to(device))
+
 
         for k in range(Xref.shape[0]):
             # transform

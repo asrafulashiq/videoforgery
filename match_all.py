@@ -85,7 +85,7 @@ if __name__ == "__main__":
         forge_time = np.arange(forge_time[0], forge_time[1]+1)
         gt_time = np.arange(gt_time[0], gt_time[1]+1)
 
-        Data_corr = np.zeros((X.shape[0], X.shape[0], 40, 40))
+        Data_corr = np.zeros((X.shape[0], X.shape[0], 40**2, 40**2))
 
         path = root / name
         path.mkdir(parents=True, exist_ok=True)
@@ -96,17 +96,26 @@ if __name__ == "__main__":
         for i in range(N):
             Xr = X.to(device)
             Xt = X[[i]].repeat((Xr.shape[0], 1, 1, 1)).to(device)
+
+            if i in forge_time:
+                i_ind = np.where(forge_time == i)[0][0]
+                gt_ind = gt_time[i_ind]
+            else:
+                gt_ind = None
+
             with torch.no_grad():
                 D = model(Xr, Xt, corr_only=True)
             for j in range(N):
                 im1 = X[i]
                 im2 = X[j]
 
-                D_corr = torch.mean(torch.topk(D[j], k=50, dim=-3)[0], dim=-3)
-                D_corr = D_corr.squeeze().data.cpu().numpy().squeeze()
-
+                D_corr = D[j]
+                D_corr = D_corr.squeeze().data.cpu().numpy()
                 Data_corr[i, j] = D_corr
 
-                pdf.plot_one(D_corr)
+                if gt_ind is not None and j == gt_ind:
+                    ax = pdf.plot_one(D_corr, cmap='plasma')
+                else:
+                    ax = pdf.plot_one(D_corr, cmap='gray')
 
         pdf.final()

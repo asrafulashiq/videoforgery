@@ -378,6 +378,7 @@ class MultiPagePdf:
         ax.set_yticks([])
 
         self.cnt_ax += 1
+        return ax
 
     def final(self):
         with PdfPages(self.out_name) as pdf:

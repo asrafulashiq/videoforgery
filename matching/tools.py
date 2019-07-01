@@ -304,13 +304,41 @@ class DecoderBlock(nn.Module):
         return self.block(x)
 
 
+class CrossCorrV2(nn.Module):
+    def __init__(self, ndiv=(10, 10), out_channel=100):
+        super().__init__()
+        self.n_div = ndiv
+        self.match_bnorm = nn.BatchNorm2d(1)
+        self.out_channel = out_channel
+
+    def forward(self, x1, x2):
+        B, C, H, W = x1.shape
+        h, w = x2.shape[-2:]
+        x1 = x1.reshape(1, B*C, H, W)
+
+        hh = h//self.n_div[0]
+        ww = w//self.n_div[1]
+        x2 = x2.reshape(B, C, self.n_div[0], hh, self.n_div[1], ww)
+        x2 = x2.permute(0, 2, 4, 1, 3, 5).reshape(-1, C, hh, ww)
+
+        match_map = F.conv2d(
+            x1, x2, groups=B,
+            padding=(hh//2, ww//2))  # 1, B * n^2, H, W
+        match_map = F.interpolate(match_map, size=(H, W), mode='bilinear')
+        match_map = match_map.permute(1, 0, 2, 3)
+        match_map = self.match_bnorm(match_map)
+        match_map = match_map.squeeze(0).view(B, -1, H, W)
+        out, _ = torch.topk(match_map, k=self.out_channel, dim=-3)
+        return out
+
+
 class CrossCorr(nn.Module):
     def __init__(self, out_channel=100):
         super().__init__()
         self.bn = nn.BatchNorm2d(1)
         self.k = out_channel
 
-    def forward(self, x1, x2):
+    def forward(self, x1, x2, corr_only=False):
         B, C, h1, w1 = x1.shape
         B, C, h2, w2 = x2.shape
         x_corr = torch.bmm(
@@ -319,6 +347,9 @@ class CrossCorr(nn.Module):
         ) / C  # B, h1*w1, h2*w2
         x_b = x_corr.reshape(B*h1*w1, 1, h2, w2)
         x_b = self.bn(x_b)
+        if corr_only:
+            x_b = x_b.reshape(B, h1*w1, h2*w2) 
+            return x_b
         out1 = x_b.reshape(B, h1, w1, h2 * w2).permute(0,
                                                        3, 1, 2)  # B, h2*w2, h1, w1
         out2 = x_b.reshape(B, h1 * w1, h2, w2)
@@ -371,15 +402,20 @@ class MatchDeepLabV3p(nn.Module):
         self.corr = CrossCorr(out_channel=100)
         # self.head = models.segmentation.deeplabv3.DeepLabHead(
         #     100, num_classes=1)
-        self.head1 = models.segmentation.deeplabv3.ASPP(in_channels=100,
-                                                        atrous_rates=[6, 12, 18])
+        # self.head1 = models.segmentation.deeplabv3.ASPP(in_channels=100,
+        #                                                 atrous_rates=[6, 12, 18])
+        self.head1 = models.segmentation.deeplabv3.ASPP(in_channels=256,
+                                                        atrous_rates=[12, 24, 36])
         self.low_conv = nn.Sequential(
-            nn.Conv2d(64, 48, 1),
-            nn.BatchNorm2d(48),
+            nn.Conv2d(256, 64, 1),
+            nn.BatchNorm2d(64),
             nn.ReLU()
         )
         self.head2 = nn.Sequential(
-            nn.Conv2d(256+48, 256, 3, padding=1),
+            nn.Conv2d(100+64, 256, 3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(256),
+            nn.Conv2d(256, 256, 3, padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU(256),
             nn.Conv2d(256, 1, 1)
@@ -390,24 +426,36 @@ class MatchDeepLabV3p(nn.Module):
         self.low_conv.apply(weights_init_normal)
         self.corr.apply(weights_init_normal)
 
-    def forward(self, x1, x2):
+    def forward(self, x1, x2, corr_only=False):
         low_feat1 = self.low_feat(x1)
         low_feat2 = self.low_feat(x2)
         feat1 = self.high_feat(low_feat1)
         feat2 = self.high_feat(low_feat2)
 
         # feat1, feat2 = self.normalizer(feat1, feat2)
-        xcorr1, xcorr2 = self.corr(feat1, feat2)
+        # xcorr1, xcorr2 = self.corr(feat1, feat2)
 
-        x_low1 = self.low_conv(low_feat1)
-        x_low2 = self.low_conv(low_feat2)
+        # x_low1 = self.low_conv(low_feat1)
+        # x_low2 = self.low_conv(low_feat2)
 
-        x_aspp1 = self.head1(xcorr1)
-        x_aspp2 = self.head1(xcorr2)
+        # x_aspp1 = self.head1(xcorr1)
+        # x_aspp2 = self.head1(xcorr2)
 
-        x1 = torch.cat((F.interpolate(x_aspp1, size=x_low1.shape[-2:]),
+        x_aspp1 = self.head1(feat1)
+        x_aspp2 = self.head1(feat2)
+
+        if corr_only:
+            Corr = self.corr(x_aspp1, x_aspp2, corr_only=True)
+            return Corr
+
+        xcorr1, xcorr2 = self.corr(x_aspp1, x_aspp2)
+
+        x_low1 = self.low_conv(feat1)
+        x_low2 = self.low_conv(feat2)
+
+        x1 = torch.cat((F.interpolate(xcorr1, size=x_low1.shape[-2:]),
                         x_low1), dim=1)
-        x2 = torch.cat((F.interpolate(x_aspp2, size=x_low2.shape[-2:]),
+        x2 = torch.cat((F.interpolate(xcorr2, size=x_low2.shape[-2:]),
                         x_low2), dim=1)
 
         out1 = self.head2(x1)
