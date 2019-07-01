@@ -157,8 +157,8 @@ class Dataset_image:
         else:
             idx = self.test_index
 
-        # if shuffle:
-        #     np.random.shuffle(idx)
+        if shuffle:
+            np.random.shuffle(idx)
 
         for ind in idx:
             D = self.data[ind]
@@ -664,10 +664,11 @@ class Dataset_image:
             mask_tem = skimage.transform.resize(
                 mask_tem, (self.args.size, self.args.size), order=0)
 
-            Xref[k] = im_o
-            Xtem[k] = im_f
-            Yref[k] = mask_ref
-            Ytem[k] = mask_tem
+            Xref[k] = im_o * (1 - (mask_ref == 0.5)
+                              [..., None]).astype(im_o.dtype)
+            Xtem[k] = im_f * ((mask_tem == 1)[..., None]).astype(im_f.dtype)
+            Yref[k] = mask_ref * (1 - (mask_ref == 0.5)).astype(mask_ref.dtype)
+            Ytem[k] = mask_tem * (mask_tem == 1).astype(mask_tem.dtype)
 
         if to_tensor:
             tfm_o = CustomTransform(self.args.size)
