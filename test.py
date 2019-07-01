@@ -422,7 +422,7 @@ def test_template_match_im(dataset, model, args, iteration, device,
         Xs, Xt, Ys, Yt = Xs.to(device), Xt.to(device), Ys.to(device),\
             Yt.to(device)
 
-        preds, predt = model(Xs, Xt)
+        preds = model(Xs, Xt)
 
         gt_mask_s = Ys.data.cpu().numpy()
         pred_mask_s = torch.sigmoid(preds).data.cpu().numpy()
@@ -433,16 +433,16 @@ def test_template_match_im(dataset, model, args, iteration, device,
                                            thres=args.thres)
         iou_all_s.append(iou_s)
 
-        ####
-        gt_mask_t = Yt.data.cpu().numpy()
-        pred_mask_t = torch.sigmoid(predt).data.cpu().numpy()
+        # ####
+        # gt_mask_t = Yt.data.cpu().numpy()
+        # pred_mask_t = torch.sigmoid(predt).data.cpu().numpy()
 
-        f_gt = gt_mask_t
-        f_pred = pred_mask_t
-        iou_t = tools.iou_mask_with_ignore(f_pred, f_gt,
-                                           thres=args.thres)
-        print(f"\t{i}: s: {iou_s:.4f}\t t:{iou_t:.4f}")
-        iou_all_t.append(iou_t)
+        # f_gt = gt_mask_t
+        # f_pred = pred_mask_t
+        # iou_t = tools.iou_mask_with_ignore(f_pred, f_gt,
+        #                                    thres=args.thres)
+        print(f"\t{i}: s: {iou_s:.4f}\t")
+        # iou_all_t.append(iou_t)
 
         # tt = utils.conf_mat(
         #     (f_gt>0.5).ravel(), f_pred.ravel()).ravel()
@@ -452,5 +452,5 @@ def test_template_match_im(dataset, model, args, iteration, device,
             break
 
     print(f"\nIoU_s: {np.mean(iou_all_s):.4f}")
-    print(f"\nIoU_t: {np.mean(iou_all_t):.4f}")
+    # print(f"\nIoU_t: {np.mean(iou_all_t):.4f}")
     # print(f"F1 source: {utils.fscore(Tscore)}")

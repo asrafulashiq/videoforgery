@@ -61,7 +61,7 @@ if __name__ == "__main__":
     init_ep = 0
     
     #! TMP
-    args.ckpt = './ckpt/immatch_unet_tmp_youtube_dlabv3_after_aspp.pkl'
+    # args.ckpt = './ckpt/immatch_unet_tmp_youtube_dlabv3_after_aspp.pkl'
 
     if args.ckpt is not None:
         checkpoint = torch.load(args.ckpt)
@@ -104,7 +104,7 @@ if __name__ == "__main__":
                                                      masks=Yref, size=args.size)
             Xft, Yft = utils.custom_transform_images(
                 images=Xtem, masks=Ytem, size=args.size)
-            pred_r, pred_f = model(Xrt.to(device), Xft.to(device))
+            pred_r = model(Xrt.to(device), Xft.to(device))
 
 
         for k in range(Xref.shape[0]):
@@ -115,23 +115,23 @@ if __name__ == "__main__":
             im_ft = CustomTransform(size=args.size)(im_forge)
 
             map_o = torch.sigmoid(pred_r[k].squeeze())
-            map_f = torch.sigmoid(pred_f[k].squeeze())
+            # map_f = torch.sigmoid(pred_f[k].squeeze())
 
             map_o = map_o.data.cpu().numpy()
             map_o = skimage.transform.resize(map_o, im_orig.shape[:2], order=0)
 
-            map_f = map_f.data.cpu().numpy()
-            map_f = skimage.transform.resize(map_f, im_orig.shape[:2], order=0)
+            # map_f = map_f.data.cpu().numpy()
+            # map_f = skimage.transform.resize(map_f, im_orig.shape[:2], order=0)
 
             iou_s = tools.iou_mask_with_ignore(map_o,
                                                Yref[k], thres=args.thres)
             print(f"\t{k}: iou source: {iou_s}")
 
-            iou_f = tools.iou_mask_with_ignore(map_f,
-                                               Ytem[k], thres=args.thres)
-            print(f"\t{k}: iou forge: {iou_f}\n")
-            IOU.append([iou_s, iou_f])
-            # draw
+            # iou_f = tools.iou_mask_with_ignore(map_f,
+            #                                    Ytem[k], thres=args.thres)
+            # print(f"\t{k}: iou forge: {iou_f}\n")
+            # IOU.append([iou_s, iou_f])
+            # # draw
 
             fig, ax = plt.subplots(2, 3, figsize=(14, 8))
 
@@ -146,24 +146,24 @@ if __name__ == "__main__":
             imsrc = utils.add_overlay(im_orig, map_o > args.thres,
                                       c1=[0, 0, 1])
 
-            imtem = utils.add_overlay(im_forge, map_f > args.thres,
-                                      c1=[0, 0, 1])
+            # imtem = utils.add_overlay(im_forge, map_f > args.thres,
+            #                           c1=[0, 0, 1])
             ax[0, 1].imshow(imsrc)
-            ax[1, 1].imshow(imtem)
+            # ax[1, 1].imshow(imtem)
 
             ax[0, 2].imshow(map_o, cmap='gray')
-            ax[1, 2].imshow(map_f, cmap='gray')
+            # ax[1, 2].imshow(map_f, cmap='gray')
 
             fname = savepath / f"{k}.png"
             fig.savefig(fname)
             plt.close('all')
 
-        IOU = np.array(IOU)
-        print("\n\tIou Mean source: ", np.mean(IOU[:, 0]))
-        print("\n\tIou Mean fourge: ", np.mean(IOU[:, 1]))
-        IOU_all.append([np.mean(IOU[:, 0]), np.mean(IOU[:, 1])])
+    #     IOU = np.array(IOU)
+    #     print("\n\tIou Mean source: ", np.mean(IOU[:, 0]))
+    #     print("\n\tIou Mean fourge: ", np.mean(IOU[:, 1]))
+    #     IOU_all.append([np.mean(IOU[:, 0]), np.mean(IOU[:, 1])])
 
-    print("-------------")
-    IOU_all = np.array(IOU_all)
-    print("\n\tIou Mean source: ", np.mean(IOU_all[:, 0]))
-    print("\n\tIou Mean fourge: ", np.mean(IOU_all[:, 1]))
+    # print("-------------")
+    # IOU_all = np.array(IOU_all)
+    # print("\n\tIou Mean source: ", np.mean(IOU_all[:, 0]))
+    # print("\n\tIou Mean fourge: ", np.mean(IOU_all[:, 1]))

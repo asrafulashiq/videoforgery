@@ -143,7 +143,6 @@ class Dataset_image:
                 (iv, fp, fmask, forig)
             )
 
-
         self.__im_file_with_src_copy = []
         for fp in Dict:
             iv, fmask, forig = Dict[fp]
@@ -712,7 +711,6 @@ class Dataset_image:
             name = name1 + "_" + name2
             return Xref, Xtem, Yref, Ytem, name
 
-
         loader = self.load_videos_all(is_training=is_training,
                                       to_tensor=False)
         while True:
@@ -726,31 +724,34 @@ class Dataset_image:
             Xref2, Xtem2, Yref2, Ytem2, name2 = self._load(
                 ret2, to_tensor=to_tensor, batch=batch, is_training=is_training)
 
-            dat1 =  Xref1, Xtem1, Yref1, Ytem1, name1
+            dat1 = Xref1, Xtem1, Yref1, Ytem1, name1
 
-            dat2 =  Xref2, Xtem2, Yref2, Ytem2, name2
-            
+            dat2 = Xref2, Xtem2, Yref2, Ytem2, name2
+
             yield dat1
             yield dat2
 
+            if is_training and np.random.rand() > 0.8:
+                dat = Xref1, torch.zeros_like(Xtem1), torch.zeros_like(Yref1), \
+                    torch.zeros_like(Ytem1), name1
+                yield dat
             # mix both
-            # if to_tensor:
-            #     lib = torch
-            # else:
-            #     lib = np
+            if np.random.rand() > 0.7:
+                if to_tensor:
+                    lib = torch
+                else:
+                    lib = np
 
-            # ind2 = np.random.choice(np.arange(Xref2.shape[0]),
-            #                         size=Xref1.shape[0])
+                ind2 = np.random.choice(np.arange(Xref2.shape[0]),
+                                        size=Xref1.shape[0])
 
-            # Xtem_d = copy.deepcopy(Xtem2[ind2])
-            # Yref_d = lib.zeros_like(Yref1)
-            # Ytem_d = lib.zeros_like(Yref1)
-            # name = name1 + "_" + name2
+                Xtem_d = copy.deepcopy(Xtem2[ind2])
+                Yref_d = lib.zeros_like(Yref1)
+                Ytem_d = lib.zeros_like(Yref1)
+                name = name1 + "_" + name2
 
-            # dat3 = Xref1, Xtem_d, Yref_d, Ytem_d, name
-
-            # ind1 = np.random.choice(np.arange(Xref1.shape[0]),
-            #                         size=Xref2.shape[0])
+                dat3 = Xref1, Xtem_d, Yref_d, Ytem_d, name
+                yield dat3
 
             # Xtem_d = copy.deepcopy(Xtem1[ind1])
             # Yref_d = lib.zeros_like(Yref2)

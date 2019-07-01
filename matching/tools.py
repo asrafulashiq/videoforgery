@@ -399,7 +399,9 @@ class MatchDeepLabV3p(nn.Module):
         self.low_feat = encoder[:7]
         self.high_feat = encoder[7:]
         self.normalizer = Normalizer()
-        self.corr = CrossCorr(out_channel=100)
+
+        out_channel_corr = 10
+        self.corr = CrossCorrV2(out_channel=out_channel_corr, ndiv=(10, 10))
         # self.head = models.segmentation.deeplabv3.DeepLabHead(
         #     100, num_classes=1)
         # self.head1 = models.segmentation.deeplabv3.ASPP(in_channels=100,
@@ -412,7 +414,7 @@ class MatchDeepLabV3p(nn.Module):
             nn.ReLU()
         )
         self.head2 = nn.Sequential(
-            nn.Conv2d(100+64, 256, 3, padding=1),
+            nn.Conv2d(out_channel_corr+64, 256, 3, padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU(256),
             nn.Conv2d(256, 256, 3, padding=1),
@@ -448,21 +450,22 @@ class MatchDeepLabV3p(nn.Module):
             Corr = self.corr(x_aspp1, x_aspp2, corr_only=True)
             return Corr
 
-        xcorr1, xcorr2 = self.corr(x_aspp1, x_aspp2)
+        # xcorr1, xcorr2 = self.corr(x_aspp1, x_aspp2)
+        xcorr1 = self.corr(x_aspp1, x_aspp2)
 
         x_low1 = self.low_conv(feat1)
-        x_low2 = self.low_conv(feat2)
+        # x_low2 = self.low_conv(feat2)
 
         x1 = torch.cat((F.interpolate(xcorr1, size=x_low1.shape[-2:]),
                         x_low1), dim=1)
-        x2 = torch.cat((F.interpolate(xcorr2, size=x_low2.shape[-2:]),
-                        x_low2), dim=1)
+        # x2 = torch.cat((F.interpolate(xcorr2, size=x_low2.shape[-2:]),
+        #                 x_low2), dim=1)
 
         out1 = self.head2(x1)
-        out2 = self.head2(x2)
+        # out2 = self.head2(x2)
         out1 = F.interpolate(out1, size=self.im_size, mode='bilinear')
-        out2 = F.interpolate(out2, size=self.im_size, mode='bilinear')
-        return out1, out2
+        # out2 = F.interpolate(out2, size=self.im_size, mode='bilinear')
+        return out1 #, out2
 
     def set_bn_to_eval(self):
         def fn(m):
