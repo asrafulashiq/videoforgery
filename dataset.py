@@ -157,8 +157,8 @@ class Dataset_image:
         else:
             idx = self.test_index
 
-        if shuffle:
-            np.random.shuffle(idx)
+        # if shuffle:
+        #     np.random.shuffle(idx)
 
         for ind in idx:
             D = self.data[ind]
@@ -615,7 +615,7 @@ class Dataset_image:
                 Xref, Xtem, Ys = Xreft, Xtemt, Yst
             yield Xref, Xtem, Ys, name
 
-    def _load(self, ret, to_tensor=True, batch=None):
+    def _load(self, ret, to_tensor=True, batch=None, is_training=True):
         X, Y_forge, forge_time, Y_orig, gt_time, name = ret
 
         forge_time = np.arange(forge_time[0], forge_time[1] + 1)
@@ -672,7 +672,10 @@ class Dataset_image:
         if to_tensor:
             tfm_o = CustomTransform(self.args.size)
             tfm_f = CustomTransform(self.args.size)
-            other_tfm = SimTransform(size=self.args.size)
+            if is_training:
+                other_tfm = SimTransform(size=self.args.size)
+            else:
+                other_tfm = None
             Xreft = torch.zeros(
                 batch_size, 3, self.args.size, self.args.size)
             Xtemt = torch.zeros(
@@ -718,9 +721,9 @@ class Dataset_image:
             except StopIteration:
                 return
             Xref1, Xtem1, Yref1, Ytem1, name1 = self._load(
-                ret1, to_tensor=to_tensor, batch=batch)
+                ret1, to_tensor=to_tensor, batch=batch, is_training=is_training)
             Xref2, Xtem2, Yref2, Ytem2, name2 = self._load(
-                ret2, to_tensor=to_tensor, batch=batch)
+                ret2, to_tensor=to_tensor, batch=batch, is_training=is_training)
 
             dat1 =  Xref1, Xtem1, Yref1, Ytem1, name1
 

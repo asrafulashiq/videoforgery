@@ -71,17 +71,17 @@ if __name__ == "__main__":
     IOU_all = []
 
     cnt = 1
-    for ret in dataset.load_data_template_match_pair(is_training=False, batch=True,
-                                                     to_tensor=True):
-        Xref, Xtem, Yref, Ytem, name = ret
-        with torch.no_grad():
-            model(Xref.to(device), Xtem.to(device))
-        cnt += 1
-        if cnt > 10:
-            break
+    # for ret in dataset.load_data_template_match_pair(is_training=True, batch=True,
+    #                                                  to_tensor=True):
+    #     Xref, Xtem, Yref, Ytem, name = ret
+    #     with torch.no_grad():
+    #         model(Xref.to(device), Xtem.to(device))
+    #     cnt += 1
+    #     if cnt > 10:
+    #         break
 
     cnt = 1
-    model.eval() 
+    model.eval()
 
     for ret in dataset.load_data_template_match_pair(is_training=False, batch=True,
                                                      to_tensor=False):
@@ -93,6 +93,13 @@ if __name__ == "__main__":
         savepath = Path("tmp3") / name
         savepath.mkdir(parents=True, exist_ok=True)
 
+        with torch.no_grad():
+            Xrt, _ = utils.custom_transform_images(images=Xref,
+                                                     masks=Yref, size=args.size)
+            Xft, _ = utils.custom_transform_images(
+                images=Xtem, masks=Ytem, size=args.size)
+            pred_r, pred_f = model(Xrt.to(device), Xft.to(device))
+
         for k in range(Xref.shape[0]):
             # transform
             im_orig = Xref[k]
@@ -100,12 +107,8 @@ if __name__ == "__main__":
             im_ot = CustomTransform(size=args.size)(im_orig)
             im_ft = CustomTransform(size=args.size)(im_forge)
 
-            im_ot = im_ot.unsqueeze(0).to(device)
-            im_ft = im_ft.unsqueeze(0).to(device)
-            with torch.no_grad():
-                map_o, map_f = model(im_ot, im_ft)
-            map_o = torch.sigmoid(map_o.squeeze())
-            map_f = torch.sigmoid(map_f.squeeze())
+            map_o = torch.sigmoid(pred_r[k].squeeze())
+            map_f = torch.sigmoid(pred_f[k].squeeze())
 
             map_o = map_o.data.cpu().numpy()
             map_o = skimage.transform.resize(map_o, im_orig.shape[:2], order=0)
@@ -126,7 +129,7 @@ if __name__ == "__main__":
             fig, ax = plt.subplots(2, 3, figsize=(14, 8))
 
             imsrc = utils.add_overlay(im_orig, Yref[k] > 0.55, (Yref[k] < 0.55) & (Yref[k] > 0.45),
-                                        c1=[0, 1, 0], c2=[0, 0.3, 0])
+                                      c1=[0, 1, 0], c2=[0, 0.3, 0])
 
             imtem = utils.add_overlay(im_forge, Ytem[k] > 0.55, (Ytem[k] < 0.55) & (Ytem[k] > 0.45),
                                       c1=[0, 1, 0], c2=[0, 0.3, 0])
@@ -141,18 +144,18 @@ if __name__ == "__main__":
             ax[0, 1].imshow(imsrc)
             ax[1, 1].imshow(imtem)
 
-            ax[0, 2].imshow(map_o, cmap='plasma')
-            ax[1, 2].imshow(map_f, cmap='plasma')
+            ax[0, 2].imshow(map_o, cmap='gray')
+            ax[1, 2].imshow(map_f, cmap='gray')
 
             fname = savepath / f"{k}.png"
             fig.savefig(fname)
             plt.close('all')
-        
+
         IOU = np.array(IOU)
         print("\n\tIou Mean source: ", np.mean(IOU[:, 0]))
         print("\n\tIou Mean fourge: ", np.mean(IOU[:, 1]))
         IOU_all.append([np.mean(IOU[:, 0]), np.mean(IOU[:, 1])])
-    
+
     print("-------------")
     IOU_all = np.array(IOU_all)
     print("\n\tIou Mean source: ", np.mean(IOU_all[:, 0]))

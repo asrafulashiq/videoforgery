@@ -51,20 +51,20 @@ if __name__ == "__main__":
     logger = SummaryWriter("./logs/" + model_name)
 
     # dataset
-    tsfm = CustomTransform
+    tsfm = CustomTransform(size=args.size)
 
     dataset = Dataset_image(args=args, transform=tsfm)
 
     # model
 
     # model = tools.MatcherPair(patch_size=args.patch_size)
-    model = tools.MatchUnet(im_size=args.size)
+    model = tools.MatchDeepLabV3p(im_size=args.size)
     model.to(device)
 
     iteration = 1
     init_ep = 0
 
-    args.ckpt = "./ckpt/immatch_unet_tmp_youtubetmp.pkl"
+    args.ckpt = "./ckpt/immatch_unet_tmp_youtube_dlabv3_after_aspp.pkl"
     if args.ckpt is not None:
         checkpoint = torch.load(args.ckpt)
         model.load_state_dict(checkpoint["model_state"])
@@ -85,7 +85,7 @@ if __name__ == "__main__":
         forge_time = np.arange(forge_time[0], forge_time[1]+1)
         gt_time = np.arange(gt_time[0], gt_time[1]+1)
 
-        Data_corr = np.zeros((X.shape[0], X.shape[0], 400, 400))
+        Data_corr = np.zeros((X.shape[0], X.shape[0], 40, 40))
 
         path = root / name
         path.mkdir(parents=True, exist_ok=True)
@@ -94,19 +94,19 @@ if __name__ == "__main__":
                            nrows=N, ncols=N, figsize=(16, 16))
 
         for i in range(N):
+            Xr = X.to(device)
+            Xt = X[[i]].repeat((Xr.shape[0], 1, 1, 1)).to(device)
+            with torch.no_grad():
+                D = model(Xr, Xt, corr_only=True)
             for j in range(N):
                 im1 = X[i]
                 im2 = X[j]
 
-                D_corr = model(im1.unsqueeze(
-                    0).cuda(), im2.unsqueeze(0).cuda(), corr_only=True)
-                D_corr = D_corr.squeeze()
-
-                D_corr = D_corr.data.cpu().numpy()
+                D_corr = torch.mean(torch.topk(D[j], k=50, dim=-3)[0], dim=-3)
+                D_corr = D_corr.squeeze().data.cpu().numpy().squeeze()
 
                 Data_corr[i, j] = D_corr
 
-                pdf.plot_one(D_corr, cmap='Blues')
+                pdf.plot_one(D_corr)
 
         pdf.final()
-        break

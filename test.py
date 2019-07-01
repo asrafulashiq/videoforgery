@@ -34,7 +34,6 @@ def test_track(dataset, model, args, iteration, device, logger=None, num=None):
         inputs = X_all.to(device)
         labels = Y_all
 
-
         preds = model(inputs)
         preds = torch.sigmoid(preds)
 
@@ -106,7 +105,6 @@ def test_tcn(dataset, model, args, iteration, device, logger=None, num=None, wit
                 f_label_all, f_pred_all).ravel()
             Tall += np.array(tt)
 
-
         if num is not None and cnt >= num:
             break
 
@@ -119,13 +117,10 @@ def test_tcn(dataset, model, args, iteration, device, logger=None, num=None, wit
         print(f"F1 Score src: {f1_mean_src:.4f}")
         print(f"F1 Score all: {utils.fscore(Tall):.4f}\n")
 
-
     if logger is not None:
         logger.add_scalar("score/f1", f1_mean, iteration)
         if with_src:
             logger.add_scalar("score/f1_src", f1_mean_src, iteration)
-
-
 
 
 @torch.no_grad()
@@ -308,13 +303,13 @@ def test_with_src(dataset,
         preds_bool = preds > args.thres
 
         tforg = utils.conf_mat((labels == 2).ravel(),
-                                         preds_bool[:, 2].ravel()).ravel()
+                               preds_bool[:, 2].ravel()).ravel()
 
         tsrc = utils.conf_mat((labels == 1).ravel(),
-                                        preds_bool[:, 1].ravel()).ravel()
+                              preds_bool[:, 1].ravel()).ravel()
 
         tback = utils.conf_mat((labels == 0).ravel(),
-                                         preds_bool[:, 0].ravel()).ravel()
+                               preds_bool[:, 0].ravel()).ravel()
 
         Tforge += tforg
         Tsrc += tsrc
@@ -341,7 +336,6 @@ def test_with_src(dataset,
         logger.add_scalar("score/f1_src", f1_src, iteration)
         logger.add_scalar("score/f1_forge", f1_forge, iteration)
         logger.add_scalar("score/f1_back", f1_back, iteration)
-
 
 
 def score_report(y_pred, y_gt, args, iteration, logger=None):
@@ -389,7 +383,7 @@ def test_template_match(dataset, model, args, iteration, device,
     iou_all = []
     Tscore = np.zeros(4)
     for i, ret in enumerate(dataset.load_data_template_match(is_training=False,
-                                                to_tensor=True, batch=True)):
+                                                             to_tensor=True, batch=True)):
         Xs, Xt, Ys = ret
         Xs, Xt, Ys = Xs.to(device), Xt.to(device), Ys.to(device)
 
@@ -417,14 +411,14 @@ def test_template_match(dataset, model, args, iteration, device,
 
 @torch.no_grad()
 def test_template_match_im(dataset, model, args, iteration, device,
-                        logger=None, num=None):
+                           logger=None, num=None):
     model.eval()
     iou_all_s = []
     iou_all_t = []
     # Tscore = np.zeros(4)
     for i, ret in enumerate(dataset.load_data_template_match_pair(is_training=False,
-                                                             to_tensor=True, batch=True)):
-        Xs, Xt, Ys, Yt, _ = ret
+                                                                  to_tensor=True, batch=True)):
+        Xs, Xt, Ys, Yt, name = ret
         Xs, Xt, Ys, Yt = Xs.to(device), Xt.to(device), Ys.to(device),\
             Yt.to(device)
 
@@ -435,7 +429,8 @@ def test_template_match_im(dataset, model, args, iteration, device,
 
         f_gt = gt_mask_s
         f_pred = pred_mask_s
-        iou_s = tools.iou_mask_with_ignore(f_pred, f_gt)
+        iou_s = tools.iou_mask_with_ignore(f_pred, f_gt,
+                                           thres=args.thres)
         iou_all_s.append(iou_s)
 
         ####
@@ -444,7 +439,8 @@ def test_template_match_im(dataset, model, args, iteration, device,
 
         f_gt = gt_mask_t
         f_pred = pred_mask_t
-        iou_t = tools.iou_mask_with_ignore(f_pred, f_gt)
+        iou_t = tools.iou_mask_with_ignore(f_pred, f_gt,
+                                           thres=args.thres)
         print(f"\t{i}: s: {iou_s:.4f}\t t:{iou_t:.4f}")
         iou_all_t.append(iou_t)
 
