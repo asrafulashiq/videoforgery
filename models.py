@@ -160,3 +160,38 @@ class Model_search(nn.Module):
         y = self.base(x)
 
         return y
+
+
+class CustomFeatureExtractor(nn.Module):
+    def __init__(self, in_channel=3, downsize=2):
+        super().__init__()
+
+        self.downsize = downsize
+        init_wide = list(range(3, 8, 2))
+        self.init_feat = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(in_channel, 16, kernel_size=k, padding=k//2),
+                nn.BatchNorm2d(16),
+                nn.ReLU()
+            )
+            for k in init_wide])
+
+        channels = [16*len(init_wide), 64, 64, 128, 128, 256, 256]
+        layers = []
+        for i in range(len(channels[:-1])):
+            layers += [
+                nn.Conv2d(channels[i], channels[i+1], 3, padding=1),
+                nn.BatchNorm2d(channels[i+1]),
+                nn.ReLU()
+            ]
+        self.next_layers = nn.Sequential(*layers)
+
+    def forward(self, x):
+        x1 = self.init_feat[0](x)
+        x2 = self.init_feat[1](x)
+        x3 = self.init_feat[2](x)
+
+        x = torch.cat((x1, x2, x3), dim=-3)
+        x = self.next_layers(x)
+        x = F.interpolate(x, scale_factor=1./self.downsize, mode='bilinear')
+        return {'out': x}

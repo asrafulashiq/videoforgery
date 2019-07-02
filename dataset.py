@@ -733,7 +733,7 @@ class Dataset_image:
 
             if is_training and np.random.rand() > 0.8:
                 dat = Xref1, torch.zeros_like(Xtem1), torch.zeros_like(Yref1), \
-                    torch.zeros_like(Ytem1), name1
+                    torch.zeros_like(Ytem1), name1+"_0"
                 yield dat
             # mix both
             if np.random.rand() > 0.7:

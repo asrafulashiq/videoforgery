@@ -9,7 +9,7 @@ import skimage
 import cv2
 import os
 import sys
-
+import models as custom_models
 
 class FeatureExtractor(nn.Module):
     def __init__(self, in_channel=3, type='vgg'):
@@ -373,8 +373,11 @@ class MatchDeepLab(nn.Module):
         self.im_size = im_size
 
         base = models.segmentation.deeplabv3_resnet101(pretrained=True)
-        self.backbone = base.backbone
-        self.aspp = base.classifier[0]   
+        # self.backbone = base.backbone
+        self.backbone = custom_models.CustomFeatureExtractor()
+
+        # self.aspp = base.classifier[0]   
+        self.aspp = models.segmentation.deeplabv3.ASPP(256, [12, 24, 36])
 
         self.corr1 = CrossCorrV2(ndiv=(5, 5), out_channel=2)
         self.corr2 = CrossCorrV2(ndiv=(10, 10), out_channel=5)
