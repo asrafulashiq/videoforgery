@@ -54,7 +54,7 @@ if __name__ == "__main__":
 
     # model
 
-    model = tools.MatchDeepLabV3p(im_size=args.size)
+    model = tools.MatchDeepLab(im_size=args.size)
     model.to(device)
 
     iteration = 1
@@ -96,8 +96,8 @@ if __name__ == "__main__":
         savepath = Path("tmp3_exp") / name
         savepath.mkdir(parents=True, exist_ok=True)
 
-        Xref = (Xref * (1 - (Yref == 0.5))[..., None]).astype(Xref.dtype)
-        Xtem = (Xtem * (Ytem == 1)[..., None]).astype(Xref.dtype)
+        # Xref = (Xref * (1 - (Yref == 0.5))[..., None]).astype(Xref.dtype)
+        # Xtem = (Xtem * (Ytem == 1)[..., None]).astype(Xref.dtype)
 
         with torch.no_grad():
             Xrt, Yrt = utils.custom_transform_images(images=Xref,

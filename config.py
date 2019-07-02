@@ -25,7 +25,7 @@ def arg_common():
     parser.add_argument("--lr", type=float, default=1e-4, help="learning rate")
     parser.add_argument("--clip", type=float, default=5,
                         help="gradient clipping")
-    parser.add_argument("--model-type", default="unet", type=str,
+    parser.add_argument("--model-type", default="deeplab", type=str,
                         help="model type (unet/albunet/deeplab)")
     parser.add_argument("--loss-type", default="bce", type=str,
                         help="loss type (bce / dice / l1)")

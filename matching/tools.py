@@ -308,14 +308,17 @@ class CrossCorrV2(nn.Module):
     def __init__(self, ndiv=(10, 10), out_channel=100):
         super().__init__()
         self.n_div = ndiv
-        self.match_bnorm = nn.BatchNorm2d(1)
+        # self.match_bnorm = nn.BatchNorm2d(1)
         self.out_channel = out_channel
 
     def forward(self, x1, x2):
         B, C, H, W = x1.shape
         h, w = x2.shape[-2:]
-        x1 = x1.reshape(1, B*C, H, W)
+        x1 = x1 / torch.norm(x1, p=2, dim=1, keepdim=True)
+        x2 = x2 / torch.norm(x2, p=2, dim=1, keepdim=True)
 
+        x1 = x1.reshape(1, B*C, H, W)
+    
         hh = h//self.n_div[0]
         ww = w//self.n_div[1]
         x2 = x2.reshape(B, C, self.n_div[0], hh, self.n_div[1], ww)
@@ -323,12 +326,16 @@ class CrossCorrV2(nn.Module):
 
         match_map = F.conv2d(
             x1, x2, groups=B,
-            padding=(hh//2, ww//2))  # 1, B * n^2, H, W
+            padding=(hh//2, ww//2)) / (hh * ww)  # 1, B * n^2, H, W
         match_map = F.interpolate(match_map, size=(H, W), mode='bilinear')
         match_map = match_map.permute(1, 0, 2, 3)
-        match_map = self.match_bnorm(match_map)
+        # match_map = self.match_bnorm(match_map)
         match_map = match_map.squeeze(0).view(B, -1, H, W)
         out, _ = torch.topk(match_map, k=self.out_channel, dim=-3)
+        out = torch.mean(out, dim=-3, keepdim=True)
+        # out = out.view(B, 1, -1)
+        # out = torch.softmax(out, dim=-1)
+        # out = out.view(B, 1, H, W)
         return out
 
 
@@ -348,7 +355,7 @@ class CrossCorr(nn.Module):
         x_b = x_corr.reshape(B*h1*w1, 1, h2, w2)
         x_b = self.bn(x_b)
         if corr_only:
-            x_b = x_b.reshape(B, h1*w1, h2*w2) 
+            x_b = x_b.reshape(B, h1*w1, h2*w2)
             return x_b
         out1 = x_b.reshape(B, h1, w1, h2 * w2).permute(0,
                                                        3, 1, 2)  # B, h2*w2, h1, w1
@@ -364,23 +371,44 @@ class MatchDeepLab(nn.Module):
     def __init__(self, im_size=320):
         super().__init__()
         self.im_size = im_size
-        self.backbone = models.vgg16_bn(
-            pretrained=True).features[:24]  # 256, H/8, W/8
-        self.normalizer = Normalizer()
-        self.corr = CrossCorr(out_channel=100)
-        self.head = models.segmentation.deeplabv3.DeepLabHead(
-            100, num_classes=1)
+
+        base = models.segmentation.deeplabv3_resnet101(pretrained=True)
+        self.backbone = base.backbone
+        self.aspp = base.classifier[0]   
+
+        self.corr1 = CrossCorrV2(ndiv=(5, 5), out_channel=2)
+        self.corr2 = CrossCorrV2(ndiv=(10, 10), out_channel=5)
+        self.corr3 = CrossCorrV2(ndiv=(20, 20), out_channel=10)
+
+        # self.head = models.segmentation.deeplabv3.DeepLabHead(
+        #     100, num_classes=1)
+        # self.head = models.segmentation.deeplabv3.ASPP(256, [12, 24, 36])
+        self.final = nn.Sequential(
+            base.classifier[1], base.classifier[2], base.classifier[3],
+            nn.Conv2d(256, 1, kernel_size=(1, 1), stride=(1, 1))
+
+        )
 
     def forward(self, x1, x2):
-        feat1 = self.backbone(x1)
-        feat2 = self.backbone(x2)
-        feat1, feat2 = self.normalizer(feat1, feat2)
-        xcorr1, xcorr2 = self.corr(feat1, feat2)
-        out1 = self.head(xcorr1)
-        out2 = self.head(xcorr2)
-        out1 = F.interpolate(out1, size=self.im_size, mode='bilinear')
-        out2 = F.interpolate(out2, size=self.im_size, mode='bilinear')
-        return out1, out2
+        feat1 = self.backbone(x1)['out']
+        feat2 = self.backbone(x2)['out']
+
+        feat1 = self.aspp(feat1)
+        feat2 = self.aspp(feat2)
+
+        corr1 = self.corr1(feat1, feat2)
+        corr2 = self.corr2(feat1, feat2)
+        corr3 = self.corr3(feat1, feat2)
+        corr = corr1 * corr2 * corr3
+
+        if torch.any(torch.isnan(feat1)):
+            import pdb; pdb.set_trace()
+
+        out_h = feat1 * corr
+        out = self.final(out_h)
+        out = F.interpolate(out, size=self.im_size, mode='bilinear')
+        # out2 = F.interpolate(out2, size=self.im_size, mode='bilinear')
+        return out
 
     def set_bn_to_eval(self):
         def fn(m):
@@ -388,6 +416,26 @@ class MatchDeepLab(nn.Module):
             if classname.find('BatchNorm') != -1:
                 m.eval()
         self.apply(fn)
+
+    def get_1x_lr_params(self):
+        modules = [self.backbone]
+        for i in range(len(modules)):
+            for m in modules[i].named_modules():
+                if isinstance(m[1], nn.Conv2d) or isinstance(m[1], SynchronizedBatchNorm2d) \
+                        or isinstance(m[1], nn.BatchNorm2d):
+                    for p in m[1].parameters():
+                        if p.requires_grad:
+                            yield p
+
+    def get_10x_lr_params(self):
+        modules = [self.final, self.aspp]
+        for i in range(len(modules)):
+            for m in modules[i].named_modules():
+                if isinstance(m[1], nn.Conv2d) or isinstance(m[1], SynchronizedBatchNorm2d) \
+                        or isinstance(m[1], nn.BatchNorm2d):
+                    for p in m[1].parameters():
+                        if p.requires_grad:
+                            yield p
 
 
 class MatchDeepLabV3p(nn.Module):
@@ -401,7 +449,7 @@ class MatchDeepLabV3p(nn.Module):
         self.normalizer = Normalizer()
 
         out_channel_corr = 10
-        self.corr = CrossCorrV2(out_channel=out_channel_corr, ndiv=(10, 10))
+        self.corr = CrossCorrV2(out_channel=out_channel_corr, ndiv=(5, 5))
         # self.head = models.segmentation.deeplabv3.DeepLabHead(
         #     100, num_classes=1)
         # self.head1 = models.segmentation.deeplabv3.ASPP(in_channels=100,
@@ -414,7 +462,7 @@ class MatchDeepLabV3p(nn.Module):
             nn.ReLU()
         )
         self.head2 = nn.Sequential(
-            nn.Conv2d(out_channel_corr+64, 256, 3, padding=1),
+            nn.Conv2d(100+64, 256, 3, padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU(256),
             nn.Conv2d(256, 256, 3, padding=1),
@@ -465,7 +513,7 @@ class MatchDeepLabV3p(nn.Module):
         # out2 = self.head2(x2)
         out1 = F.interpolate(out1, size=self.im_size, mode='bilinear')
         # out2 = F.interpolate(out2, size=self.im_size, mode='bilinear')
-        return out1 #, out2
+        return out1  # , out2
 
     def set_bn_to_eval(self):
         def fn(m):
@@ -473,7 +521,7 @@ class MatchDeepLabV3p(nn.Module):
             if classname.find('BatchNorm') != -1:
                 m.eval()
         self.apply(fn)
-    
+
     def get_1x_lr_params(self):
         modules = [self.low_feat, self.high_feat]
         for i in range(len(modules)):

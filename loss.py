@@ -57,7 +57,6 @@ def BCE_loss(y, labels, with_weight=False, with_logits=True):
     else:
         bce_loss = F.binary_cross_entropy(y, labels, wgt)
 
-
     if torch.isnan(bce_loss) or bce_loss < 0:
         import pdb
         pdb.set_trace()
