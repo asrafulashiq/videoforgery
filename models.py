@@ -167,7 +167,7 @@ class CustomFeatureExtractor(nn.Module):
         super().__init__()
 
         self.downsize = downsize
-        init_wide = list(range(3, 8, 2))
+        init_wide = [3, 5, 7]
         self.init_feat = nn.ModuleList([
             nn.Sequential(
                 nn.Conv2d(in_channel, 16, kernel_size=k, padding=k//2),
@@ -191,7 +191,7 @@ class CustomFeatureExtractor(nn.Module):
         x2 = self.init_feat[1](x)
         x3 = self.init_feat[2](x)
 
-        x = torch.cat((x1, x2, x3), dim=-3)
-        x = self.next_layers(x)
+        x_low = torch.cat((x1, x2, x3), dim=-3)
+        x = self.next_layers(x_low)
         x = F.interpolate(x, scale_factor=1./self.downsize, mode='bilinear')
-        return {'out': x}
+        return {'out': (x, x_low)}

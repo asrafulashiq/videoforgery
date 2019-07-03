@@ -11,6 +11,7 @@ import os
 import sys
 import models as custom_models
 
+
 class FeatureExtractor(nn.Module):
     def __init__(self, in_channel=3, type='vgg'):
         super().__init__()
@@ -318,7 +319,7 @@ class CrossCorrV2(nn.Module):
         x2 = x2 / torch.norm(x2, p=2, dim=1, keepdim=True)
 
         x1 = x1.reshape(1, B*C, H, W)
-    
+
         hh = h//self.n_div[0]
         ww = w//self.n_div[1]
         x2 = x2.reshape(B, C, self.n_div[0], hh, self.n_div[1], ww)
@@ -376,7 +377,7 @@ class MatchDeepLab(nn.Module):
         # self.backbone = base.backbone
         self.backbone = custom_models.CustomFeatureExtractor()
 
-        # self.aspp = base.classifier[0]   
+        # self.aspp = base.classifier[0]
         self.aspp = models.segmentation.deeplabv3.ASPP(256, [12, 24, 36])
 
         self.corr1 = CrossCorrV2(ndiv=(5, 5), out_channel=2)
@@ -393,8 +394,8 @@ class MatchDeepLab(nn.Module):
         )
 
     def forward(self, x1, x2):
-        feat1 = self.backbone(x1)['out']
-        feat2 = self.backbone(x2)['out']
+        feat1, flow1 = self.backbone(x1)['out']
+        feat2, flow2 = self.backbone(x2)['out']
 
         feat1 = self.aspp(feat1)
         feat2 = self.aspp(feat2)
@@ -403,9 +404,14 @@ class MatchDeepLab(nn.Module):
         corr2 = self.corr2(feat1, feat2)
         corr3 = self.corr3(feat1, feat2)
         corr = corr1 * corr2 * corr3
+                                                                                      
+        corr_low = self.corr3(F.interpolate(flow1, size=feat1.shape[-2:], mode='bicubic'),
+                           F.interpolate(flow2, size=feat2.shape[-2:], mode='bicubic'))
+        corr = corr * corr_low
 
         if torch.any(torch.isnan(feat1)):
-            import pdb; pdb.set_trace()
+            import pdb
+            pdb.set_trace()
 
         out_h = feat1 * corr
         out = self.final(out_h)
