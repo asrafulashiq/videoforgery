@@ -12,6 +12,162 @@ import sys
 import models as custom_models
 
 
+
+def std_mean(x):
+    return (x-x.mean(dim=-3, keepdim=True))/(1e-8+x.std(dim=-3, keepdim=True))
+
+
+class BusterModel(nn.Module):
+    def __init__(self, topk=256):
+        super().__init__()
+        self.encoder = Encoder()  # out channel 512
+
+        self.corrLayer = CrossCorr(out_channel=topk)
+        self.bn1 = nn.BatchNorm2d(topk)
+        self.bn2 = nn.BatchNorm2d(topk)
+
+        self.decoder = Decoder(in_channel=topk)
+
+    def forward(self, x1, x2):
+
+        x1 = self.encoder(x1)
+        x1 = std_mean(x1)
+        x2 = self.encoder(x2)
+        x2 = std_mean(x2)
+        x_corr1, x_corr2 = self.corrLayer(x1, x2)
+
+        xc1 = self.bn1(x_corr1)
+        # xc2 = self.bn2(x_corr2)
+
+        out1 = self.decoder(xc1)
+        # out2 = self.decoder(xc2)
+
+        return out1
+
+    def set_bn_to_eval(self):
+        def fn(m):
+            classname = m.__class__.__name__
+            if classname.find('BatchNorm') != -1:
+                m.eval()
+        self.apply(fn)
+
+
+class CustomConv(nn.Module):
+    def __init__(self, in_channel=64, out_channel=64, kernel_size=3,
+                 activation='relu', num=1, pool=None):
+        super().__init__()
+        layers = []
+        first = True
+        for i in range(num):
+            if first:
+                in_c = in_channel
+                first = False
+            else:
+                in_c = out_channel
+            layers.append(
+                nn.Conv2d(in_c, out_channel, kernel_size,
+                padding=kernel_size//2)
+            )
+            if activation is not None:
+                layers.append(nn.ReLU())
+        if pool is not None:
+            layers.append(nn.MaxPool2d(2, stride=2))
+        self.layers = nn.Sequential(*layers)
+    
+    def forward(self, x):
+        x = self.layers(x)
+        return x
+
+
+class Encoder(nn.Module):
+    def __init__(self, in_channel=3):
+        super().__init__()
+
+        self.layer1 = CustomConv(in_channel, 64, num=2, pool=True)
+        self.layer2 = CustomConv(64, 128, num=2, pool=True)
+        self.layer3 = CustomConv(128, 256, num=3, pool=True)
+        self.layer4 = CustomConv(256, 512, num=3, pool=True)
+
+    def forward(self, x):
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+
+        return x
+
+
+class BNInception(nn.Module):
+    def __init__(self, in_channel=512, out_channel=512, filt_list=[1, 3, 5]):
+        super().__init__()
+        layers = []
+        for filt in filt_list:
+            layers.append(
+                nn.Conv2d(in_channel, out_channel, kernel_size=filt,
+                padding=filt//2)
+            )
+        self.layers = nn.ModuleList(layers)
+        self.bn = nn.BatchNorm2d(len(filt_list) * out_channel)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        uc = []
+        for conv in self.layers:
+            uc.append(conv(x))
+        x = torch.cat(uc, dim=-3)
+        x = self.bn(x)
+        x = self.relu(x)
+        return x
+
+
+class Decoder(nn.Module):
+    def __init__(self, in_channel=64):
+        super().__init__()
+
+        self.binc1 = BNInception(in_channel, 8)
+        self.binc2 = BNInception(24, 6)
+        self.binc3 = BNInception(42, 4)
+        self.binc4 = BNInception(54, 2)
+        self.binc5 = BNInception(60, 2)
+        self.binc6 = BNInception(66, 2, filt_list=[5, 7, 11])
+
+        self.last_conv = nn.Conv2d(6, 1, kernel_size=3, padding=1)
+
+    def forward(self, x):
+        x = self.binc1(x)
+        x = F.interpolate(x, scale_factor=2, mode='bilinear')
+        
+        x1 = self.binc2(x)
+        x = torch.cat((
+            F.interpolate(x, scale_factor=2, mode='bilinear'),
+            F.interpolate(x1, scale_factor=2, mode='bilinear')
+        ), dim=-3)
+
+        x1 = self.binc3(x)
+        x = torch.cat((
+            F.interpolate(x, scale_factor=2, mode='bilinear'),
+            F.interpolate(x1, scale_factor=2, mode='bilinear')
+        ), dim=-3)
+
+        x1 = self.binc4(x)
+        x = torch.cat((
+            F.interpolate(x, scale_factor=2, mode='bilinear'),
+            F.interpolate(x1, scale_factor=2, mode='bilinear')
+        ), dim=-3)
+
+        x1 = self.binc5(x)
+        x = torch.cat((
+            x, x1
+        ), dim=-3)
+
+        x = self.binc6(x)
+        out = self.last_conv(x)
+
+        return out
+
+
+
+
 class FeatureExtractor(nn.Module):
     def __init__(self, in_channel=3, type='vgg'):
         super().__init__()
@@ -354,16 +510,21 @@ class CrossCorr(nn.Module):
             x1.view(B, C, -1)
         ) / C  # B, h1*w1, h2*w2
         x_b = x_corr.reshape(B*h1*w1, 1, h2, w2)
-        x_b = self.bn(x_b)
+        # x_b = self.bn(x_b)
         if corr_only:
             x_b = x_b.reshape(B, h1*w1, h2*w2)
             return x_b
-        out1 = x_b.reshape(B, h1, w1, h2 * w2).permute(0,
-                                                       3, 1, 2)  # B, h2*w2, h1, w1
-        out2 = x_b.reshape(B, h1 * w1, h2, w2)
+        out1 = x_b.reshape(B, h1 * w1, h2 * w2)
+        out2 = x_b.reshape(B, h1 * w1, h2 * w2).transpose(-1, -2)
 
-        out1, _ = torch.topk(out1, k=self.k, dim=-3)
-        out2, _ = torch.topk(out2, k=self.k, dim=-3)  # B, k, h, w
+        out1, _ = torch.sort(out1, dim=-1)
+        out2, _ = torch.sort(out2, dim=-1)
+
+        out1 = F.adaptive_max_pool1d(out1, self.k)
+        out2 = F.adaptive_max_pool1d(out2, self.k)
+
+        out1 = out1.reshape(B, h1, w1, -1).permute(0, 3, 1, 2)
+        out2 = out2.reshape(B, h2, w2, -1).permute(0, 3, 1, 2)
 
         return out1, out2
 
@@ -404,9 +565,9 @@ class MatchDeepLab(nn.Module):
         corr2 = self.corr2(feat1, feat2)
         corr3 = self.corr3(feat1, feat2)
         corr = corr1 * corr2 * corr3
-                                                                                      
+
         corr_low = self.corr3(F.interpolate(flow1, size=feat1.shape[-2:], mode='bicubic'),
-                           F.interpolate(flow2, size=feat2.shape[-2:], mode='bicubic'))
+                              F.interpolate(flow2, size=feat2.shape[-2:], mode='bicubic'))
         corr = corr * corr_low
 
         if torch.any(torch.isnan(feat1)):

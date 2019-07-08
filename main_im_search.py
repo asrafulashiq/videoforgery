@@ -63,7 +63,7 @@ if __name__ == "__main__":
 
     # model = tools.MatcherPair(patch_size=args.patch_size)
     # model = tools.MatchUnet(im_size=args.size)
-    model = tools.MatchDeepLab(im_size=args.size)
+    model = tools.BusterModel(topk=100)
     model.to(device)
 
     iteration = 1

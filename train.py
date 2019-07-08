@@ -292,7 +292,7 @@ def train_template_match_im(Xs, Xt, Ys, Yt, model, optimizer, args, iteration, d
     module = model.module if isinstance(model, nn.DataParallel) else model
     module.train()
 
-    if iteration > 300:
+    if iteration > 500:
         module.set_bn_to_eval()
 
     Xs, Xt, Ys, Yt = Xs.to(device), Xt.to(device), Ys.to(device), Yt.to(device)
