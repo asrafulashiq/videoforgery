@@ -616,6 +616,8 @@ class Dataset_image:
 
     def _load(self, ret, to_tensor=True, batch=None, is_training=True):
         X, Y_forge, forge_time, Y_orig, gt_time, name = ret
+        if forge_time is None:
+            return None
 
         forge_time = np.arange(forge_time[0], forge_time[1] + 1)
         gt_time = np.arange(gt_time[0], gt_time[1] + 1)
@@ -651,9 +653,9 @@ class Dataset_image:
             mask_ref[Y_forge[ind_orig] > 0.5] = 0.5
             mask_ref[Y_orig[ind_orig] > 0.5] = 1
 
-            mask_tem[Y_forge[ind_forge] > 0.5] = 1
             mask_tem[Y_orig[ind_forge] > 0.5] = 0.5
-
+            mask_tem[Y_forge[ind_forge] > 0.5] = 1
+            
             im_f = skimage.transform.resize(
                 im_forge, (self.args.size, self.args.size), order=2)
             im_o = skimage.transform.resize(
@@ -716,20 +718,36 @@ class Dataset_image:
         while True:
             try:
                 ret1 = next(loader)
-                ret2 = next(loader)
+                # ret2 = next(loader)
             except StopIteration:
                 return
-            Xref1, Xtem1, Yref1, Ytem1, name1 = self._load(
+            dat1 = self._load(
                 ret1, to_tensor=to_tensor, batch=batch, is_training=is_training)
-            Xref2, Xtem2, Yref2, Ytem2, name2 = self._load(
-                ret2, to_tensor=to_tensor, batch=batch, is_training=is_training)
+            # Xref2, Xtem2, Yref2, Ytem2, name2 = self._load(
+            #     ret2, to_tensor=to_tensor, batch=batch, is_training=is_training)
 
-            dat1 = Xref1, Xtem1, Yref1, Ytem1, name1
+            if dat1 is None:
+                continue
 
-            dat2 = Xref2, Xtem2, Yref2, Ytem2, name2
+            Xref1, Xtem1, Yref1, Ytem1, name1 = dat1
 
             yield dat1
-            yield dat2
+
+            # dat2 = Xref2, Xtem2, Yref2, Ytem2, name2
+
+            # for k in range(Xref1.shape[0]):
+            #     import torchvision
+            #     im = Xref1[k]
+            #     tmp = Xtem1[k]
+            #     gt = Yref1[k]
+            #     Path(f'tmp/{name1}/').mkdir(exist_ok=True, parents=True)
+            #     torchvision.utils.save_image(im, f'tmp/{name1}/{k}_0.png', normalize=True)
+            #     torchvision.utils.save_image(tmp, f'tmp/{name1}/{k}_1.png', normalize=True)
+            #     torchvision.utils.save_image(
+            #         gt, f'tmp/{name1}/{k}_2.png', normalize=True)
+
+            # yield dat1
+            # yield dat2
 
             # if is_training and np.random.rand() > 0.8:
             #     dat = Xref1, torch.zeros_like(Xtem1), torch.zeros_like(Yref1), \

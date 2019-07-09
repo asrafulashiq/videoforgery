@@ -301,7 +301,7 @@ def train_template_match_im(Xs, Xt, Ys, Yt, model, optimizer, args, iteration, d
 
     optimizer.zero_grad()
 
-    loss1 = BCE_loss(preds, Ys, with_weight=True)
+    loss1 = dice_loss_with_ignore(preds, Ys)
     # loss2 = BCE_loss(predt, Yt)
 
     loss = loss1 #+ loss2

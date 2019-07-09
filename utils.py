@@ -39,7 +39,7 @@ class SimTransform():
             size = (size, size)
         # scale
         self.scale = np.random.choice(
-            np.linspace(0.9, 1.5, 30)
+            np.linspace(0.9, 1.1, 30)
         )
         # rotation
         self.rot = np.random.choice(

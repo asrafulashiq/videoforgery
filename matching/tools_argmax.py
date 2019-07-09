@@ -3,6 +3,7 @@ from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
+from torchvision import models
 from torchvision import transforms
 from matching.argmax import SoftArgmax2D
 import numpy as np
@@ -13,7 +14,7 @@ class Corr(nn.Module):
         super().__init__()
         self.h = hw[0]
         self.w = hw[1]
-        self.argmax = SoftArgmax2D(window_fn="Parzen", window_width=10)
+        self.argmax = SoftArgmax2D(window_fn="Parzen", window_width=10, wt=5)
 
         ind_arr = np.flip(np.indices(hw), 0).astype(np.float32)
         ind_arr[0] = ind_arr[0] / self.w
@@ -27,7 +28,7 @@ class Corr(nn.Module):
         _, _, h2, w2 = x2.shape
 
         x_c = torch.matmul(x1.permute(0, 2, 3, 1).view(b, -1, c),
-                           x2.view(b, c, -1)) / c  # h1 * w1, h2 * w2
+                           x2.view(b, c, -1))  # h1 * w1, h2 * w2
         # x_c = F.softmax(x_c, dim=-1) * F.softmax(x_c, dim=-2)
         x_c = x_c.reshape(b, h1, w1, h2, w2)
 
@@ -45,34 +46,84 @@ class Corr(nn.Module):
 def std_mean(x):
     return (x-x.mean(dim=-3, keepdim=True))/(1e-8+x.std(dim=-3, keepdim=True))
 
+def plot(x, name='1'):
+    if x.shape[0] == 2:
+        x = torch.cat((x, x[[0]]), dim=-3)
+    x = F.interpolate(x.unsqueeze(0), size=(120, 120), mode='bilinear').squeeze(0)
+    fn = lambda x: (x-x.min())/(x.max()-x.min()+1e-8)
+    torchvision.utils.save_image(fn(x), f'{name}.png')
+
 
 class BusterModel(nn.Module):
-    def __init__(self, hw=(20, 20)):
+    def __init__(self, hw=(40, 40)):
         super().__init__()
+        self.hw = hw
+
         self.encoder = Extractor_VGG19()
 
         self.corrLayer = Corr(hw=hw)
 
-        self.decoder = Decoder(in_channel=2)
+        self.aspp = models.segmentation.deeplabv3.ASPP(in_channels=96,
+                                                       atrous_rates=[6, 12, 24])
 
-        self.hw = hw
+        self.low_conv = nn.Sequential(
+            nn.Conv2d(128, 64, 1),
+            nn.BatchNorm2d(64),
+            nn.ReLU()
+        )
+
+        self.corr_conv = nn.Sequential(
+            nn.Conv2d(2, 16, 3, padding=1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            nn.Conv2d(16, 16, 3, padding=1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, 3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU()
+        )
+        self.head = nn.Sequential(
+            nn.Conv2d(256, 256, 3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(256),
+            nn.Conv2d(256, 256, 3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(256),
+            nn.Conv2d(256, 1, 1)
+        )
+
+        # self.head1.apply(weights_init_normal)
+        self.head.apply(weights_init_normal)
+        self.low_conv.apply(weights_init_normal)
+        self.corr_conv.apply(weights_init_normal)
+        # self.aspp.apply(weights_init_normal)
 
     def forward(self, x1, x2):
+        input1 = x1
         b, c, h, w = x1.shape
-        x1 = self.encoder(x1, out_size=self.hw)
-        x1 = std_mean(x1)
-        x2 = self.encoder(x2, out_size=self.hw)
-        x2 = std_mean(x2)
+        x1, x1_low = self.encoder(x1, out_size=self.hw)
+        # x1 = std_mean(x1)
+        x1 = F.normalize(x1, p=2, dim=-3)
+        x2, _ = self.encoder(x2, out_size=self.hw)
+        x2 = F.normalize(x2, p=2, dim=-3)
+        # x2 = std_mean(x2)
 
         xc1 = self.corrLayer(x1, x2)
 
         # xc1 = self.bn1(x_corr1)
         # xc2 = self.bn2(x_corr2)
 
-        out1 = self.decoder(xc1)
+        x1_low = self.low_conv(x1_low)
+        x1_c = self.corr_conv(xc1)
+
+        xcl = torch.cat((x1_low, x1_c), dim=-3)
+
+        out = self.aspp(xcl)
+        out = self.head(out)
         # out2 = self.decoder(xc2)
-        out1 = F.interpolate(out1, size=(h, w), mode='bilinear')
-        return out1
+        out = F.interpolate(out, size=(h, w), mode='bilinear')
+        return out
 
     def set_bn_to_eval(self):
         def fn(m):
@@ -92,7 +143,8 @@ class BusterModel(nn.Module):
                             yield p
 
     def get_10x_lr_params(self):
-        modules = [self.decoder, self.corrLayer]
+        modules = [self.aspp, self.corrLayer, self.low_conv, self.corr_conv,
+                   self.head]
         for i in range(len(modules)):
             for m in modules[i].named_modules():
                 if isinstance(m[1], nn.Conv2d) \
@@ -100,6 +152,16 @@ class BusterModel(nn.Module):
                     for p in m[1].parameters():
                         if p.requires_grad:
                             yield p
+
+
+def weights_init_normal(m):
+    classname = m.__class__.__name__
+    if classname.find("Conv") != -1:
+        torch.nn.init.kaiming_normal_(m.weight.data)
+        # torch.nn.init.normal_(m.weight.data, 1.0/3, 0.02)
+    elif classname.find("BatchNorm2d") != -1:
+        torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
+        torch.nn.init.constant_(m.bias.data, 0.0)
 
 
 class CustomConv(nn.Module):
@@ -216,69 +278,25 @@ class Decoder(nn.Module):
         return out
 
 
-class FeatureExtractor(nn.Sequential):
-    def __init__(self):
-        super(FeatureExtractor, self).__init__()
-
-    def forward(self, x, out_size=(40, 40)):
-        outputs = []
-        for module in self._modules:
-            x = self._modules[module](x)
-            outputs.append(F.interpolate(x, size=out_size, mode='bilinear',
-            align_corners=True))
-        out = torch.cat(outputs, dim=-3)
-        return out
-
-
 class Extractor_VGG19(nn.Module):
     def __init__(self):
         super().__init__()
         cnn_temp = torchvision.models.vgg19(pretrained=True).features
-        self.model = FeatureExtractor()
 
-        conv_counter = 1
-        relu_counter = 1
-        block_counter = 1
+        self.layer1 = nn.Sequential(cnn_temp[:10])  # stride 4
+        self.layer2 = nn.Sequential(cnn_temp[10:19])  # s 8
+        self.layer3 = nn.Sequential(cnn_temp[19:28])  # s 16
 
-        for i, layer in enumerate(list(cnn_temp)):
+    def forward(self, x, out_size=(40, 40)):
+        x1 = self.layer1(x)
+        x1_u = F.interpolate(x1, size=out_size, mode='bilinear')
 
-            if isinstance(layer, nn.Conv2d):
-                name = "conv_" + str(block_counter) + "_" + \
-                    str(conv_counter) + "__" + str(i)
-                conv_counter += 1
-                self.model.add_module(name, layer)
+        x2 = self.layer2(x1)
+        x2_u = F.interpolate(x2, size=out_size, mode='bilinear')
 
-            if isinstance(layer, nn.ReLU):
-                name = "relu_" + str(block_counter) + "_" + \
-                    str(relu_counter) + "__" + str(i)
-                relu_counter += 1
-                self.model.add_module(name, nn.ReLU(inplace=False))
+        x3 = self.layer3(x2)
+        x3_u = F.interpolate(x3, size=out_size, mode='bilinear')
 
-            if isinstance(layer, nn.MaxPool2d):
-                name = "pool_" + str(block_counter) + "__" + str(i)
-                relu_counter = conv_counter = 1
-                block_counter += 1
-                self.model.add_module(name, nn.MaxPool2d((2, 2)))
+        x_all = torch.cat([x1_u, x2_u, x3_u], dim=-3)
 
-
-    def forward_subnet(self, input_tensor, L):
-
-        if L == 5:
-            start_layer, end_layer = 21, 29  # From Conv4_2 to ReLU5_1 inclusively
-        elif L == 4:
-            start_layer, end_layer = 12, 20  # From Conv3_2 to ReLU4_1 inclusively
-        elif L == 3:
-            start_layer, end_layer = 7, 11  # From Conv2_2 to ReLU3_1 inclusively
-        elif L == 2:
-            start_layer, end_layer = 2, 6  # From Conv1_2 to ReLU2_1 inclusively
-        else:
-            raise ValueError("Invalid layer number")
-
-        for i, layer in enumerate(list(self.model)):
-            if i >= start_layer and i <= end_layer:
-                input_tensor = layer(input_tensor)
-        return input_tensor
-
-    def forward(self, img_tensor, out_size=(40, 40)):
-        features = self.model(img_tensor, out_size)
-        return features
+        return x_all, x1_u

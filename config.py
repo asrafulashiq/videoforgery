@@ -21,7 +21,7 @@ def arg_common():
 
     parser.add_argument("--split", type=float, default=0.7, help="train split")
 
-    parser.add_argument("--seed", type=int, default=0, help="random seed")
+    parser.add_argument("--seed", type=int, default=1, help="random seed")
     parser.add_argument("--lr", type=float, default=1e-4, help="learning rate")
     parser.add_argument("--clip", type=float, default=5,
                         help="gradient clipping")
