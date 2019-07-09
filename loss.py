@@ -111,22 +111,19 @@ def BCE_loss_with_src(y, labels, with_weight=False, with_logits=True):
     return loss1, loss2
 
 
+# def sim_loss(y1, y2, m1, m2):
+#     y2 = -y2
 
-def Two_loss(y, labels):
-    y = torch.softmax(y, dim=1)
-    lab_forge = (labels == 2).type_as(y)
-    loss_forge = BCE_loss(y[:, 2], lab_forge, with_logits=False)
+#     if torch.all(m2 < 0.8) or torch.all(m1 < 0.8):
+#         return 0
 
-    lab_src = (labels==1).type_as(y)
-    loss_src = torch.mean(-lab_src * torch.log(y[:, 1] + 1e-8 ))
+#     val1 = y1 * (m1.expand_as(y1) > 0.8).type_as(y1)
+#     val2 = y2 * (m2.expand_as(y2) > 0.8).type_as(y1)
 
-    lab_back = (labels == 0).type_as(y)
-    loss_back = torch.mean(-lab_back * torch.log(y[:, 0] + 1e-8))
+#     val1.sum(dim)
+    
 
 
-    alpha = 0.5
-    loss = loss_forge + loss_src + 0.5 * loss_back
-    return loss
 
 
 def CrossEntropy2d(input, target):
@@ -141,36 +138,5 @@ def CrossEntropy2d(input, target):
 
     # weight = torch.tensor([0.2, 0.3, 0.5]).cuda()
     loss = F.cross_entropy(input, target)
-
-    return loss
-
-
-def tri_loss_max(y, labels, r=0.05):
-
-    B, C, H, W = y.shape
-
-    lab_1 = (labels > 0.95).type_as(y)
-    lab_2 = (labels <= 0.95).type_as(y)
-
-    n_lab_1 = torch.norm(lab_1, p=0, dim=[-1, -2], keepdim=True)
-    min_n = torch.min(n_lab_1)
-
-    y_1 = y * lab_1
-    y_2 = y * lab_2
-
-    k = torch.max(torch.ceil((min_n * r)).int(), torch.tensor(1, dtype=torch.int).cuda())
-    top1 = torch.mean(torch.topk(y_1.view(B, C, -1), k=k, dim=-1)[0], dim=-1, keepdim=True)
-    top2 = torch.mean(torch.topk(y_2.view(B, C, -1), k=k, dim=-1)[0], dim=-1, keepdim=True)
-
-    delta = 0.5
-
-    loss = torch.max(
-        delta - (top1 - top2), torch.tensor(0., dtype=top1.dtype).cuda()
-    ) * (n_lab_1 > 0).type_as(top1)
-
-    loss = loss.mean()
-
-    if torch.isnan(loss):
-        import pdb; pdb.set_trace()
 
     return loss

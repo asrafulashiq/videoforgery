@@ -20,6 +20,8 @@ class Corr(nn.Module):
         ind_arr[0] = ind_arr[0] / self.w
         ind_arr[1] = ind_arr[1] / self.h
 
+        self.alpha = nn.Parameter(torch.tensor(10., dtype=torch.float32)).cuda()
+
         self.ind_arr = torch.tensor(ind_arr.copy(), dtype=torch.float).cuda()
 
     def forward(self, x1, x2):
@@ -27,9 +29,10 @@ class Corr(nn.Module):
         b, c, h1, w1 = x1.shape
         _, _, h2, w2 = x2.shape
 
-        x_c = torch.matmul(x1.permute(0, 2, 3, 1).view(b, -1, c),
+        x_c_o = torch.matmul(x1.permute(0, 2, 3, 1).view(b, -1, c),
                            x2.view(b, c, -1))  # h1 * w1, h2 * w2
-        # x_c = F.softmax(x_c, dim=-1) * F.softmax(x_c, dim=-2)
+        x_c = F.softmax(x_c_o*self.alpha, dim=-1) * \
+            F.softmax(x_c_o*self.alpha, dim=-2)
         x_c = x_c.reshape(b, h1, w1, h2, w2)
 
         xc1 = x_c.view(b, h1*w1, h2, w2)
@@ -38,9 +41,19 @@ class Corr(nn.Module):
         ind_max[..., 1] = ind_max[..., 1] / h2
         ind_max = ind_max.view(b, h1, w1, -1).permute(0, 3, 1, 2)
 
-        ind_max = ind_max - self.ind_arr
+        ind_max1 = ind_max - self.ind_arr
 
-        return ind_max
+        xc2 = x_c.view(b, h1, w1, h2 * w2).permute(0, 3, 1, 2).contiguous()
+        ind_max = self.argmax(xc2)
+        ind_max[..., 0] = ind_max[..., 0] / w2
+        ind_max[..., 1] = ind_max[..., 1] / h2
+        ind_max = ind_max.view(b, h1, w1, -1).permute(0, 3, 1, 2)
+
+        ind_max2 = ind_max - self.ind_arr
+
+
+
+        return ind_max1, ind_max2
 
 
 def std_mean(x):
@@ -93,14 +106,12 @@ class BusterModel(nn.Module):
             nn.Conv2d(256, 1, 1)
         )
 
-        # self.head1.apply(weights_init_normal)
         self.head.apply(weights_init_normal)
         self.low_conv.apply(weights_init_normal)
         self.corr_conv.apply(weights_init_normal)
-        # self.aspp.apply(weights_init_normal)
 
     def forward(self, x1, x2):
-        input1 = x1
+        input1, input2 = x1, x2
         b, c, h, w = x1.shape
         x1, x1_low = self.encoder(x1, out_size=self.hw)
         # x1 = std_mean(x1)
@@ -109,10 +120,7 @@ class BusterModel(nn.Module):
         x2 = F.normalize(x2, p=2, dim=-3)
         # x2 = std_mean(x2)
 
-        xc1 = self.corrLayer(x1, x2)
-
-        # xc1 = self.bn1(x_corr1)
-        # xc2 = self.bn2(x_corr2)
+        xc1, xc2 = self.corrLayer(x1, x2)
 
         x1_low = self.low_conv(x1_low)
         x1_c = self.corr_conv(xc1)
@@ -121,9 +129,12 @@ class BusterModel(nn.Module):
 
         out = self.aspp(xcl)
         out = self.head(out)
-        # out2 = self.decoder(xc2)
         out = F.interpolate(out, size=(h, w), mode='bilinear')
-        return out
+
+        xc1 = F.interpolate(xc1, size=(h, w), mode='bilinear')
+        xc2 = F.interpolate(xc2, size=(h, w), mode='bilinear')
+
+        return out #, xc1, xc2
 
     def set_bn_to_eval(self):
         def fn(m):
