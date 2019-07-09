@@ -33,6 +33,7 @@ def arg_common():
                         help="gamma")
 
     parser.add_argument("--suffix", type=str, default="", help="model name suffix")
+    parser.add_argument("--resume", type=int, default=1)
 
     return parser
 

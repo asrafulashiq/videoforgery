@@ -66,7 +66,7 @@ if __name__ == "__main__":
     model = tools_argmax.BusterModel()
     model.to(device)
 
-    iteration = 1
+    iteration = args.resume
     init_ep = 0
 
     if args.ckpt is not None:
