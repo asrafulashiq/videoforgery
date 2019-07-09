@@ -12,6 +12,38 @@ import sys
 import models as custom_models
 
 
+class Corr(nn.Module):
+    def __init__(self, out_channel=100):
+        super().__init__()
+
+    def forward(self, x1, x2, corr_only=False):
+        B, C, h1, w1 = x1.shape
+        B, C, h2, w2 = x2.shape
+        x_corr = torch.bmm(
+            x1.permute(0, 2, 3, 1).view(B, h1 * w1, C),
+            x1.view(B, C, -1)
+        ) / C  # B, h1*w1, h2*w2
+        x_b = x_corr.reshape(B*h1*w1, 1, h2, w2)
+        # x_b = self.bn(x_b)
+        if corr_only:
+            x_b = x_b.reshape(B, h1*w1, h2*w2)
+            return x_b
+        out1 = x_b.reshape(B, h1 * w1, h2 * w2)
+        out2 = x_b.reshape(B, h1 * w1, h2 * w2).transpose(-1, -2)
+
+        out1, _ = torch.sort(out1, dim=-1)
+        out2, _ = torch.sort(out2, dim=-1)
+
+        out1 = F.adaptive_max_pool1d(out1, self.k)
+        out2 = F.adaptive_max_pool1d(out2, self.k)
+
+        out1 = out1.reshape(B, h1, w1, -1).permute(0, 3, 1, 2)
+        out2 = out2.reshape(B, h2, w2, -1).permute(0, 3, 1, 2)
+
+        return out1, out2
+
+
+
 
 def std_mean(x):
     return (x-x.mean(dim=-3, keepdim=True))/(1e-8+x.std(dim=-3, keepdim=True))
@@ -29,7 +61,7 @@ class BusterModel(nn.Module):
         self.decoder = Decoder(in_channel=topk)
 
     def forward(self, x1, x2):
-
+        b, c, h, w = x1.shape
         x1 = self.encoder(x1)
         x1 = std_mean(x1)
         x2 = self.encoder(x2)
@@ -41,7 +73,7 @@ class BusterModel(nn.Module):
 
         out1 = self.decoder(xc1)
         # out2 = self.decoder(xc2)
-
+        out1 = F.interpolate(out1, size=(h, w), mode='bilinear')
         return out1
 
     def set_bn_to_eval(self):
@@ -93,6 +125,7 @@ class Encoder(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
+
 
         return x
 
@@ -164,7 +197,6 @@ class Decoder(nn.Module):
         out = self.last_conv(x)
 
         return out
-
 
 
 
@@ -311,25 +343,6 @@ class MatcherPair(nn.Module):
     def forward(self, x_ref, x_template):
         fref_feat, fref_low = self.feature_extractor(x_ref)  # C, 112, 112
         ftem_feat, _ = self.feature_extractor(x_template)  # C, 112, 112
-
-        # fref, ftem = self.normalizer(fref_feat, ftem_feat)
-
-        # # downsample ftem to (12, 12)
-        # ftem = self.tem_pool(ftem)
-
-        # dist = torch.einsum('bcmn, bcpq -> bmnpq', (fref, ftem))
-        # _, m, n, p, q = dist.shape
-        # dist = dist.reshape(-1, m*n, p*q)
-
-        # # conf_ref = F.softmax(self.coef_ref * dist, dim=-2)
-        # # conf_tmp = F.softmax(self.coef_temp * dist, dim=-1)
-        # # confidence = torch.sqrt(conf_ref * conf_tmp)
-
-        # confidence = dist
-
-        # conf_values, _ = torch.topk(confidence, k=self.k, dim=-1)
-        # conf = conf_values.view(-1, m, n, self.k).permute(0, 3, 1, 2)
-        # k, 112, 112
 
         conf = self.corr(fref_feat, ftem_feat)
 
@@ -494,39 +507,6 @@ class CrossCorrV2(nn.Module):
         # out = torch.softmax(out, dim=-1)
         # out = out.view(B, 1, H, W)
         return out
-
-
-class CrossCorr(nn.Module):
-    def __init__(self, out_channel=100):
-        super().__init__()
-        self.bn = nn.BatchNorm2d(1)
-        self.k = out_channel
-
-    def forward(self, x1, x2, corr_only=False):
-        B, C, h1, w1 = x1.shape
-        B, C, h2, w2 = x2.shape
-        x_corr = torch.bmm(
-            x1.permute(0, 2, 3, 1).view(B, h1 * w1, C),
-            x1.view(B, C, -1)
-        ) / C  # B, h1*w1, h2*w2
-        x_b = x_corr.reshape(B*h1*w1, 1, h2, w2)
-        # x_b = self.bn(x_b)
-        if corr_only:
-            x_b = x_b.reshape(B, h1*w1, h2*w2)
-            return x_b
-        out1 = x_b.reshape(B, h1 * w1, h2 * w2)
-        out2 = x_b.reshape(B, h1 * w1, h2 * w2).transpose(-1, -2)
-
-        out1, _ = torch.sort(out1, dim=-1)
-        out2, _ = torch.sort(out2, dim=-1)
-
-        out1 = F.adaptive_max_pool1d(out1, self.k)
-        out2 = F.adaptive_max_pool1d(out2, self.k)
-
-        out1 = out1.reshape(B, h1, w1, -1).permute(0, 3, 1, 2)
-        out2 = out2.reshape(B, h2, w2, -1).permute(0, 3, 1, 2)
-
-        return out1, out2
 
 
 class MatchDeepLab(nn.Module):

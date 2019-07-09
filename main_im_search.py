@@ -19,7 +19,7 @@ import config
 from dataset import Dataset_image
 from dataset_coco import COCODataset
 from utils import CustomTransform
-from matching import tools
+from matching import tools, tools_argmax
 
 from train import train_template_match_im
 from test import test_template_match_im
@@ -63,7 +63,7 @@ if __name__ == "__main__":
 
     # model = tools.MatcherPair(patch_size=args.patch_size)
     # model = tools.MatchUnet(im_size=args.size)
-    model = tools.BusterModel(topk=100)
+    model = tools_argmax.BusterModel()
     model.to(device)
 
     iteration = 1
@@ -73,13 +73,12 @@ if __name__ == "__main__":
         checkpoint = torch.load(args.ckpt)
         model.load_state_dict(checkpoint["model_state"])
 
-    if model.__class__.__name__.find('DeepLab') != -1:
-        model_params = [
-            {"params": model.get_1x_lr_params(), "lr": args.lr},
-            {"params": model.get_10x_lr_params(), "lr": args.lr * 10},
-        ]
+    model_params = [
+        {"params": model.get_1x_lr_params(), "lr": args.lr},
+        {"params": model.get_10x_lr_params(), "lr": args.lr * 10},
+    ]
 
-    model_params = filter(lambda p: p.requires_grad, model.parameters())
+    # model_params = filter(lambda p: p.requires_grad, model.parameters())
     # optimizer
     optimizer = torch.optim.Adam(model_params, lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)

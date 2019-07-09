@@ -422,10 +422,10 @@ def test_template_match_im(dataset, model, args, iteration, device,
         Xs, Xt, Ys, Yt = Xs.to(device), Xt.to(device), Ys.to(device),\
             Yt.to(device)
 
-        preds = model(Xs, Xt)
+        preds = torch.sigmoid(model(Xs, Xt))
 
         gt_mask_s = Ys.data.cpu().numpy()
-        pred_mask_s = torch.sigmoid(preds).data.cpu().numpy()
+        pred_mask_s = preds.data.cpu().numpy()
 
         f_gt = gt_mask_s
         f_pred = pred_mask_s
@@ -447,6 +447,11 @@ def test_template_match_im(dataset, model, args, iteration, device,
         # tt = utils.conf_mat(
         #     (f_gt>0.5).ravel(), f_pred.ravel()).ravel()
         # Tscore += np.array(tt)
+
+        if logger is not None:
+            lpred = preds.clamp_min(0.06)
+            fn_norm = lambda x: (x-x.min()) / (x.max()-x.min()+1e-8)
+            logger.add_images(f"Im_{i}", fn_norm(Xs * lpred), iteration)
 
         if num is not None and i >= num:
             break

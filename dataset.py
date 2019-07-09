@@ -731,27 +731,27 @@ class Dataset_image:
             yield dat1
             yield dat2
 
-            if is_training and np.random.rand() > 0.8:
-                dat = Xref1, torch.zeros_like(Xtem1), torch.zeros_like(Yref1), \
-                    torch.zeros_like(Ytem1), name1+"_0"
-                yield dat
-            # mix both
-            if np.random.rand() > 0.7:
-                if to_tensor:
-                    lib = torch
-                else:
-                    lib = np
+            # if is_training and np.random.rand() > 0.8:
+            #     dat = Xref1, torch.zeros_like(Xtem1), torch.zeros_like(Yref1), \
+            #         torch.zeros_like(Ytem1), name1+"_0"
+            #     yield dat
+            # # mix both
+            # if np.random.rand() > 0.7:
+            #     if to_tensor:
+            #         lib = torch
+            #     else:
+            #         lib = np
 
-                ind2 = np.random.choice(np.arange(Xref2.shape[0]),
-                                        size=Xref1.shape[0])
+            #     ind2 = np.random.choice(np.arange(Xref2.shape[0]),
+            #                             size=Xref1.shape[0])
 
-                Xtem_d = copy.deepcopy(Xtem2[ind2])
-                Yref_d = lib.zeros_like(Yref1)
-                Ytem_d = lib.zeros_like(Yref1)
-                name = name1 + "_" + name2
+            #     Xtem_d = copy.deepcopy(Xtem2[ind2])
+            #     Yref_d = lib.zeros_like(Yref1)
+            #     Ytem_d = lib.zeros_like(Yref1)
+            #     name = name1 + "_" + name2
 
-                dat3 = Xref1, Xtem_d, Yref_d, Ytem_d, name
-                yield dat3
+            #     dat3 = Xref1, Xtem_d, Yref_d, Ytem_d, name
+            #     yield dat3
 
             # Xtem_d = copy.deepcopy(Xtem1[ind1])
             # Yref_d = lib.zeros_like(Yref2)
