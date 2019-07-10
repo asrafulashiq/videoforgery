@@ -48,7 +48,7 @@ def BCE_loss(y, labels, with_weight=False, with_logits=True):
     _w = torch.sum(labels) / (labels.shape[0])
 
     if not with_weight:
-        wgt=None
+        wgt = None
     else:
         wgt = labels * (1 - _w) + _w * (1 - labels)
 
@@ -69,18 +69,29 @@ def BCE_loss_with_ignore(y, labels, with_weight=False, with_logits=True):
     y = y.contiguous().view(-1)
     labels = labels.contiguous().view(-1)
 
-    _w = torch.sum(labels) / (labels.shape[0])
+    ignore_ind = ((labels > 0.4) & (labels < 0.6))
+
+    ind_pos = (labels > 0.9) & ~ignore_ind
+    ind_neg = (labels < 0.1) & ~ignore_ind
+    ind_total = ind_pos.sum()+ind_neg.sum()
+
+    _w = torch.max(
+        (ind_pos.sum() / (ind_total + 1e-8)).float(),
+        torch.tensor(0.05).to(y.device)
+    )
 
     if not with_weight:
         wgt = torch.ones_like(labels)
     else:
         wgt = labels * (1 - _w) + _w * (1 - labels)
-    wgt[(labels > 0.4) & (labels < 0.6)] = 0
+    wgt[ignore_ind] = 0
 
     if with_logits:
-        bce_loss = F.binary_cross_entropy_with_logits(y, labels, wgt)
+        bce_loss = F.binary_cross_entropy_with_logits(y, labels, wgt, reduction='none')
     else:
-        bce_loss = F.binary_cross_entropy(y, labels, wgt)
+        bce_loss = F.binary_cross_entropy(y, labels, wgt, reduction='none')
+    
+    bce_loss = bce_loss.sum() / wgt.sum()
 
     if torch.isnan(bce_loss) or bce_loss < 0:
         import pdb
@@ -103,11 +114,12 @@ def dice_loss_with_ignore(y, labels):
     return 1 - (numer + smooth) / (den + smooth)
 
 
-
 def BCE_loss_with_src(y, labels, with_weight=False, with_logits=True):
 
-    loss1 = BCE_loss(y[:, 0], labels[:, 0], with_weight=with_weight, with_logits=True)
-    loss2 = BCE_loss(y[:, 1], labels[:, 1], with_weight=with_weight, with_logits=True)
+    loss1 = BCE_loss(y[:, 0], labels[:, 0],
+                     with_weight=with_weight, with_logits=True)
+    loss2 = BCE_loss(y[:, 1], labels[:, 1],
+                     with_weight=with_weight, with_logits=True)
     return loss1, loss2
 
 
@@ -121,9 +133,6 @@ def BCE_loss_with_src(y, labels, with_weight=False, with_logits=True):
 #     val2 = y2 * (m2.expand_as(y2) > 0.8).type_as(y1)
 
 #     val1.sum(dim)
-    
-
-
 
 
 def CrossEntropy2d(input, target):

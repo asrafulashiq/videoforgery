@@ -73,12 +73,12 @@ if __name__ == "__main__":
         checkpoint = torch.load(args.ckpt)
         model.load_state_dict(checkpoint["model_state"])
 
-    model_params = [
-        {"params": model.get_1x_lr_params(), "lr": args.lr / 10},
-        {"params": model.get_10x_lr_params(), "lr": args.lr * 10},
-    ]
+    # model_params = [
+    #     {"params": model.get_1x_lr_params(), "lr": args.lr / 10},
+    #     {"params": model.get_10x_lr_params(), "lr": args.lr * 10},
+    # ]
 
-    # model_params = filter(lambda p: p.requires_grad, model.parameters())
+    model_params = filter(lambda p: p.requires_grad, model.parameters())
     # optimizer
     optimizer = torch.optim.Adam(model_params, lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)

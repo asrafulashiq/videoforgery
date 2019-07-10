@@ -301,12 +301,10 @@ def train_template_match_im(Xs, Xt, Ys, Yt, model, optimizer, args, iteration, d
 
     optimizer.zero_grad()
 
-    loss1 = dice_loss_with_ignore(preds, Ys)
+    loss1 = BCE_loss_with_ignore(preds, Ys, with_weight=True)
     # loss2 = BCE_loss(predt, Yt)
 
-    loss = loss1 #+ loss2
-
-    # loss_top = tri_loss_max(preds, Ys) + tri_loss_max(predt, Yt)
+    loss = loss1
 
     # loss_all = loss + loss_top
     # loss_all.backward()

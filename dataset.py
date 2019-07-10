@@ -665,11 +665,11 @@ class Dataset_image:
             mask_tem = skimage.transform.resize(
                 mask_tem, (self.args.size, self.args.size), order=0)
 
-            Xref[k] = im_o * (1 - (mask_ref == 0.5)
-                              [..., None]).astype(im_o.dtype)
-            Xtem[k] = im_f * ((mask_tem == 1)[..., None]).astype(im_f.dtype)
-            Yref[k] = mask_ref * (1 - (mask_ref == 0.5)).astype(mask_ref.dtype)
-            Ytem[k] = mask_tem * (mask_tem == 1).astype(mask_tem.dtype)
+            Xref[k] = im_o #* (1 - (mask_ref == 0.5)
+                           #   [..., None]).astype(im_o.dtype)
+            Xtem[k] = im_f #* ((mask_tem == 1)[..., None]).astype(im_f.dtype)
+            Yref[k] = mask_ref #* (1 - (mask_ref == 0.5)).astype(mask_ref.dtype)
+            Ytem[k] = mask_tem #* (mask_tem == 1).astype(mask_tem.dtype)
 
         if to_tensor:
             tfm_o = CustomTransform(self.args.size)
@@ -733,45 +733,33 @@ class Dataset_image:
 
             yield dat1
 
-            # if dat2 is None:
-            #     continue
+            if dat2 is None:
+                continue
 
-            # Xref2, Xtem2, Yref2, Ytem2, name2 = dat2
+            Xref2, Xtem2, Yref2, Ytem2, name2 = dat2
+            yield dat2
 
-            # # for k in range(Xref1.shape[0]):
-            # #     import torchvision
-            # #     im = Xref1[k]
-            # #     tmp = Xtem1[k]
-            # #     gt = Yref1[k]
-            # #     Path(f'tmp/{name1}/').mkdir(exist_ok=True, parents=True)
-            # #     torchvision.utils.save_image(im, f'tmp/{name1}/{k}_0.png', normalize=True)
-            # #     torchvision.utils.save_image(tmp, f'tmp/{name1}/{k}_1.png', normalize=True)
-            # #     torchvision.utils.save_image(
-            # #         gt, f'tmp/{name1}/{k}_2.png', normalize=True)
+            if is_training and np.random.rand() > 0.8:
+                dat = Xref1, torch.zeros_like(Xtem1), torch.zeros_like(Yref1), \
+                    torch.zeros_like(Ytem1), name1 + "_0"
+                yield dat
+            # mix both
+            if np.random.rand() > 0.7:
+                if to_tensor:
+                    lib = torch
+                else:
+                    lib = np
 
-            # yield dat2
+                ind2 = np.random.choice(np.arange(Xref2.shape[0]),
+                                        size=Xref1.shape[0])
 
-            # if is_training and np.random.rand() > 0.8:
-            #     dat = Xref1, torch.zeros_like(Xtem1), torch.zeros_like(Yref1), \
-            #         torch.zeros_like(Ytem1), name1 + "_0"
-            #     yield dat
-            # # mix both
-            # if np.random.rand() > 0.7:
-            #     if to_tensor:
-            #         lib = torch
-            #     else:
-            #         lib = np
+                Xtem_d = copy.deepcopy(Xtem2[ind2])
+                Yref_d = lib.zeros_like(Yref1)
+                Ytem_d = lib.zeros_like(Yref1)
+                name = name1 + "_" + name2
 
-            #     ind2 = np.random.choice(np.arange(Xref2.shape[0]),
-            #                             size=Xref1.shape[0])
-
-            #     Xtem_d = copy.deepcopy(Xtem2[ind2])
-            #     Yref_d = lib.zeros_like(Yref1)
-            #     Ytem_d = lib.zeros_like(Yref1)
-            #     name = name1 + "_" + name2
-
-            #     dat3 = Xref1, Xtem_d, Yref_d, Ytem_d, name
-            #     yield dat3
+                dat3 = Xref1, Xtem_d, Yref_d, Ytem_d, name
+                yield dat3
 
             # Xtem_d = copy.deepcopy(Xtem1[ind1])
             # Yref_d = lib.zeros_like(Yref2)
