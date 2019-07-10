@@ -90,8 +90,8 @@ class BusterModel(nn.Module):
         self.corrLayer = Corr(hw=hw, topk=topk)
 
         self.low_conv = nn.Sequential(
-            nn.Conv2d(128, 64, 1),
-            nn.BatchNorm2d(64),
+            nn.Conv2d(128, 128, 1),
+            nn.BatchNorm2d(128),
             nn.ReLU()
         )
 
@@ -113,8 +113,8 @@ class BusterModel(nn.Module):
             nn.ReLU()
         )
 
-        self.aspp = models.segmentation.deeplabv3.ASPP(in_channels=32,
-                                                       atrous_rates=[6, 12, 24])
+        self.aspp = models.segmentation.deeplabv3.ASPP(in_channels=128+32,
+                                                       atrous_rates=[12, 24, 36])
 
         self.head = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1),
@@ -142,9 +142,9 @@ class BusterModel(nn.Module):
 
         x1_c = self.corr_conv(xc1)
         val1_c = self.val_conv(val1)
-        # x1_low = self.low_conv(x1_low)
-        # x_low_c = torch.cat((x1_low, x1_c, val1_c), dim=-3)
-        x_low_c = torch.cat((x1_c, val1_c), dim=-3)
+        x1_low = self.low_conv(x1_low)
+        x_low_c = torch.cat((x1_low, x1_c, val1_c), dim=-3)
+        # x_low_c = torch.cat((x1_c, val1_c), dim=-3)
 
         out = self.aspp(x_low_c)
         out = self.head(out)

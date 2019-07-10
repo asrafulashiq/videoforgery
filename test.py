@@ -429,8 +429,8 @@ def test_template_match_im(dataset, model, args, iteration, device,
 
         f_gt = gt_mask_s
         f_pred = pred_mask_s
-        iou_s = tools.iou_mask_with_ignore(f_pred, f_gt,
-                                           thres=args.thres)
+        iou_s, iou_org = tools.iou_mask_with_ignore(f_pred, f_gt,
+                                           thres=args.thres, return_org=True)
         iou_all_s.append(iou_s)
 
         # ####
@@ -450,8 +450,10 @@ def test_template_match_im(dataset, model, args, iteration, device,
 
         if logger is not None:
             lpred = preds.clamp_min(0.06)
+            ind_wrs = np.argmin(iou_org)
             fn_norm = lambda x: (x-x.min()) / (x.max()-x.min()+1e-8)
-            logger.add_images(f"Im_{i}", fn_norm(Xs * lpred), iteration)
+            logger.add_image(f"Im_{i}",
+                fn_norm(Xs[ind_wrs] * lpred[ind_wrs]), iteration)
 
         if num is not None and i >= num:
             break

@@ -386,7 +386,7 @@ def iou_mask(mask1, mask2):
     return val
 
 
-def iou_mask_with_ignore(mask_pred, mask_gt, thres=0.5):
+def iou_mask_with_ignore(mask_pred, mask_gt, thres=0.5, return_org=False):
     ignore_mask = (mask_gt > 0.45) & (mask_gt < 0.55)
 
     intersection = np.sum((mask_pred > thres) & (mask_gt > 0.5) & ~ignore_mask,
@@ -394,11 +394,14 @@ def iou_mask_with_ignore(mask_pred, mask_gt, thres=0.5):
     union = np.sum((mask_gt > 0.5) | (mask_pred > thres) & ~ignore_mask,
                    axis=(-1, -2))
     iou = intersection / (union + 1e-8)
+    iou_org = iou
     iou = iou[union > 1e-5]
     if iou.size == 0:
         val = 1
     else:
         val = np.mean(iou)
+    if return_org:
+        return val, iou_org
     return val
 
 
