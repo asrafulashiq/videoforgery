@@ -422,7 +422,8 @@ def test_template_match_im(dataset, model, args, iteration, device,
         Xs, Xt, Ys, Yt = Xs.to(device), Xt.to(device), Ys.to(device),\
             Yt.to(device)
 
-        preds = torch.sigmoid(model(Xs, Xt))
+        preds, predt = model(Xs, Xt)
+        preds, predt = torch.sigmoid(preds), torch.sigmoid(predt)
 
         gt_mask_s = Ys.data.cpu().numpy()
         pred_mask_s = preds.data.cpu().numpy()
@@ -430,19 +431,21 @@ def test_template_match_im(dataset, model, args, iteration, device,
         f_gt = gt_mask_s
         f_pred = pred_mask_s
         iou_s, iou_org = tools.iou_mask_with_ignore(f_pred, f_gt,
-                                           thres=args.thres, return_org=True)
+                                                    thres=args.thres, return_org=True)
         iou_all_s.append(iou_s)
+        print(f"\t{i}: s: {iou_s:.4f}\t")
 
         # ####
-        # gt_mask_t = Yt.data.cpu().numpy()
-        # pred_mask_t = torch.sigmoid(predt).data.cpu().numpy()
+        gt_mask_t = Yt.data.cpu().numpy()
+        pred_mask_t = predt.data.cpu().numpy()
 
-        # f_gt = gt_mask_t
-        # f_pred = pred_mask_t
-        # iou_t = tools.iou_mask_with_ignore(f_pred, f_gt,
-        #                                    thres=args.thres)
-        print(f"\t{i}: s: {iou_s:.4f}\t")
-        # iou_all_t.append(iou_t)
+        f_gt = gt_mask_t
+        f_pred = pred_mask_t
+        iou_t, _ = tools.iou_mask_with_ignore(f_pred, f_gt,
+                                           thres=args.thres, return_org=True)
+        
+        iou_all_t.append(iou_t)
+        print(f"\t{i}: t: {iou_t:.4f}\t")
 
         # tt = utils.conf_mat(
         #     (f_gt>0.5).ravel(), f_pred.ravel()).ravel()
@@ -451,12 +454,17 @@ def test_template_match_im(dataset, model, args, iteration, device,
         if logger is not None:
             lpred = preds.clamp_min(0.06)
             ind_wrs = np.argmin(iou_org)
-            fn_norm = lambda x: (x-x.min()) / (x.max()-x.min()+1e-8)
-            logger.add_image(f"Im_{i}",
-                fn_norm(Xs[ind_wrs] * lpred[ind_wrs]), iteration)
+            def fn_norm(x): return (x-x.min()) / (x.max()-x.min()+1e-8)
+            logger.add_image(f"Im_{i}/s",
+                             fn_norm(Xs[ind_wrs] * lpred[ind_wrs]), iteration)
+
+            lpred = predt.clamp_min(0.06)
+            logger.add_image(f"Im_{i}/t",
+                             fn_norm(Xt[ind_wrs] * lpred[ind_wrs]), iteration)
 
         if num is not None and i >= num:
             break
+        print()
 
     print(f"\nIoU_s: {np.mean(iou_all_s):.4f}")
     # print(f"\nIoU_t: {np.mean(iou_all_t):.4f}")

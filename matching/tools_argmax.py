@@ -80,7 +80,7 @@ def plot(x, name='1'):
 
 
 class BusterModel(nn.Module):
-    def __init__(self, hw=(40, 40), topk=10):
+    def __init__(self, hw=(40, 40), topk=3):
         super().__init__()
         self.hw = hw
         self.topk = topk
@@ -134,27 +134,33 @@ class BusterModel(nn.Module):
         x1, x1_low = self.encoder(x1, out_size=self.hw)
         # x1 = std_mean(x1)
         x1 = F.normalize(x1, p=2, dim=-3)
-        x2, _ = self.encoder(x2, out_size=self.hw)
+        x2, x2_low = self.encoder(x2, out_size=self.hw)
         x2 = F.normalize(x2, p=2, dim=-3)
         # x2 = std_mean(x2)
 
         xc1, xc2, val1, val2 = self.corrLayer(x1, x2)
+        xc2 = -xc2
 
-        x1_c = self.corr_conv(xc1)
-        val1_c = self.val_conv(val1)
+        xc = torch.cat((xc1, xc2), 0)
+        val = torch.cat((val1, val2), 0)
+
+        x_c = self.corr_conv(xc)
+        val_c = self.val_conv(val)
         # x1_low = self.low_conv(x1_low)
         # x_low_c = torch.cat((x1_low, x1_c, val1_c), dim=-3)
-        x_low_c = torch.cat((x1_c, val1_c), dim=-3)
-
+        x_low_c = torch.cat((x_c, val_c), dim=-3)
+        
         out = self.aspp(x_low_c)
         out = self.head(out)
         out = F.interpolate(out, size=(h, w), mode='bilinear',
                             align_corners=True)
+        out1 = out[:b]
+        out2 = out[b:]
 
         # xc1 = F.interpolate(xc1, size=(h, w), mode='bilinear')
         # xc2 = F.interpolate(xc2, size=(h, w), mode='bilinear')
 
-        return out  # , xc1, xc2
+        return out1, out2
 
     def set_bn_to_eval(self):
         def fn(m):

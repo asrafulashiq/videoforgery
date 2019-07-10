@@ -297,19 +297,17 @@ def train_template_match_im(Xs, Xt, Ys, Yt, model, optimizer, args, iteration, d
 
     Xs, Xt, Ys, Yt = Xs.to(device), Xt.to(device), Ys.to(device), Yt.to(device)
 
-    preds = model(Xs, Xt)
+    preds, predt = model(Xs, Xt)
 
     optimizer.zero_grad()
 
     loss1 = BCE_loss_with_ignore(preds, Ys, with_weight=True)
-    # loss2 = BCE_loss(predt, Yt)
+    loss2 = BCE_loss_with_ignore(predt, Yt, with_weight=True)
 
-    loss = loss1
-
-    # loss_all = loss + loss_top
-    # loss_all.backward()
-
+    loss = loss1 + loss2
     loss.backward()
+
+    # loss.backward()
 
     optimizer.step()
 
