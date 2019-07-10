@@ -49,18 +49,18 @@ class Corr(nn.Module):
         ind_max = self.argmax(xc1)
         ind_max[..., 0] = ind_max[..., 0] / w2
         ind_max[..., 1] = ind_max[..., 1] / h2
-        ind_max = ind_max.view(b, h1, w1, -1).permute(0, 3, 1, 2)
+        ind_max_o1 = ind_max.view(b, h1, w1, -1).permute(0, 3, 1, 2)
 
-        ind_max1 = ind_max - self.ind_arr
+        ind_max1 = ind_max_o1 - self.ind_arr
 
         xc2 = x_c.view(b, h1, w1, h2 * w2).permute(0, 3, 1, 2).contiguous()
         val1 = get_topk(xc2, k=self.topk)
         ind_max = self.argmax(xc2)
         ind_max[..., 0] = ind_max[..., 0] / w2
         ind_max[..., 1] = ind_max[..., 1] / h2
-        ind_max = ind_max.view(b, h1, w1, -1).permute(0, 3, 1, 2)
+        ind_max_o2 = ind_max.view(b, h1, w1, -1).permute(0, 3, 1, 2)
 
-        ind_max2 = ind_max - self.ind_arr
+        ind_max2 = ind_max_o2 - self.ind_arr
 
         return ind_max1, ind_max2, val1, val2
 
@@ -69,11 +69,11 @@ def std_mean(x):
     return (x-x.mean(dim=-3, keepdim=True))/(1e-8+x.std(dim=-3, keepdim=True))
 
 
-def plot(x, name='1'):
+def plot(x, name='1', size=(120, 120)):
     if x.shape[0] == 2:
         x = torch.cat((x, x[[0]]), dim=-3)
-    x = F.interpolate(x.unsqueeze(0), size=(
-        120, 120), mode='bilinear').squeeze(0)
+    x = F.interpolate(x.unsqueeze(0), size=size,
+                      mode='bilinear').squeeze(0)
 
     def fn(x): return (x-x.min())/(x.max()-x.min()+1e-8)
     torchvision.utils.save_image(fn(x), f'{name}.png')
