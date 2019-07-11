@@ -15,6 +15,34 @@ def get_topk(x, k=10):
     return val
 
 
+def _zero_window(x_in, h, w, rat_s=0.1):
+    sigma = h*rat_s, w*rat_s
+    # c = h * w
+    b, c, h2, w2 = x_in.shape
+    ind_r = torch.arange(h2).float()
+    ind_c = torch.arange(w2).float()
+    ind_r = ind_r.view(1, 1, -1, 1).expand_as(x_in)
+    ind_c = ind_c.view(1, 1, 1, -1).expand_as(x_in)
+
+    # center
+    c_indices = torch.from_numpy(np.indices((h, w))).float()
+    c_ind_r = c_indices[0].reshape(-1)
+    c_ind_c = c_indices[1].reshape(-1)
+
+    cent_r = c_ind_r.reshape(1, c, 1, 1).expand_as(x_in)
+    cent_c = c_ind_c.reshape(1, c, 1, 1).expand_as(x_in)
+
+    def fn_gauss(x, u, s):
+        return torch.exp(-(x-u)**2 / (2*s**2))
+
+    gaus_r = fn_gauss(ind_r, cent_r, sigma[0])
+    gaus_c = fn_gauss(ind_c, cent_c, sigma[1])
+    out_g = 1 - gaus_r * gaus_c
+
+    out = out_g.to(x_in.device) * x_in
+    return out
+
+
 class Corr(nn.Module):
     def __init__(self, hw=(60, 60), topk=10):
         super().__init__()
@@ -44,7 +72,8 @@ class Corr(nn.Module):
             F.softmax(x_c_o*self.alpha, dim=-2)
         x_c = x_c.reshape(b, h1, w1, h2, w2)
 
-        xc1 = x_c.view(b, h1*w1, h2, w2)
+        xc1_o = x_c.view(b, h1*w1, h2, w2)
+        xc1 = _zero_window(xc1_o, h1, w1, rat_s=0.15)
         val2 = get_topk(xc1, k=self.topk)
         ind_max = self.argmax(xc1)
         ind_max[..., 0] = ind_max[..., 0] / w2
@@ -53,7 +82,8 @@ class Corr(nn.Module):
 
         ind_max1 = ind_max_o1 - self.ind_arr
 
-        xc2 = x_c.view(b, h1, w1, h2 * w2).permute(0, 3, 1, 2).contiguous()
+        xc2_o = x_c.view(b, h1, w1, h2 * w2).permute(0, 3, 1, 2).contiguous()
+        xc2 = _zero_window(xc2_o, h2, w2, rat_s=0.15)
         val1 = get_topk(xc2, k=self.topk)
         ind_max = self.argmax(xc2)
         ind_max[..., 0] = ind_max[..., 0] / w2
@@ -80,7 +110,7 @@ def plot(x, name='1', size=(120, 120)):
 
 
 class BusterModel(nn.Module):
-    def __init__(self, hw=(40, 40), topk=3):
+    def __init__(self, hw=(40, 40), topk=10):
         super().__init__()
         self.hw = hw
         self.topk = topk
@@ -149,7 +179,7 @@ class BusterModel(nn.Module):
         # x1_low = self.low_conv(x1_low)
         # x_low_c = torch.cat((x1_low, x1_c, val1_c), dim=-3)
         x_low_c = torch.cat((x_c, val_c), dim=-3)
-        
+
         out = self.aspp(x_low_c)
         out = self.head(out)
         out = F.interpolate(out, size=(h, w), mode='bilinear',
