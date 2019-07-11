@@ -423,7 +423,13 @@ def test_template_match_im(dataset, model, args, iteration, device,
             Yt.to(device)
 
         preds, predt = model(Xs, Xt)
-        preds, predt = torch.sigmoid(preds), torch.sigmoid(predt)
+        preds, predt = F.softmax(preds, dim=-3), F.softmax(predt, dim=-3)
+
+        preds = preds[:, 1]
+        predt = predt[:, 0]
+    
+        Ys = Ys.squeeze(1)
+        Yt = Yt.squeeze(1)
 
         gt_mask_s = Ys.data.cpu().numpy()
         pred_mask_s = preds.data.cpu().numpy()
@@ -467,5 +473,5 @@ def test_template_match_im(dataset, model, args, iteration, device,
         print()
 
     print(f"\nIoU_s: {np.mean(iou_all_s):.4f}")
-    # print(f"\nIoU_t: {np.mean(iou_all_t):.4f}")
+    print(f"\nIoU_t: {np.mean(iou_all_t):.4f}")
     # print(f"F1 source: {utils.fscore(Tscore)}")

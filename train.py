@@ -261,27 +261,35 @@ def train_with_boundary(
         logger.add_scalar(f"{pref}/boundary", loss_boundary, iteration)
 
 
-def train_template_match(Xs, Xt, Y, model, optimizer, args, iteration, device,
+def train_template_match(Xs, Xt, Ys, Yt, model, optimizer, args, iteration, device,
                          logger=None):
-    model.train()
+    module = model.module if isinstance(model, nn.DataParallel) else model
+    module.train()
 
-    if iteration > 300:
-        model.set_bn_to_eval()
+    # if iteration > 500:
+    #     module.set_bn_to_eval()
 
-    Xs, Xt, Y = Xs.to(device), Xt.to(device), Y.to(device)
+    Xs, Xt, Ys, Yt = Xs.to(device), Xt.to(device), Ys.to(device), Yt.to(device)
 
-    pred = model(Xs, Xt)
-
-    loss = BCE_loss(pred, Y, with_weight=True)
-    # loss = dice_loss(pred, Y)
-
+    preds, predt = model(Xs, Xt)
 
     optimizer.zero_grad()
+
+    loss1 = CE_loss_src_target(preds, Ys, mode="source")
+    loss2 = CE_loss_src_target(predt, Yt, mode="forge")
+
+    loss = loss1 + loss2
     loss.backward()
+
+    # loss.backward()
+
     optimizer.step()
 
     loss_val = loss.data.cpu().numpy()
-    print(f"{iteration}: loss {loss_val:.4f}")
+    print(f"{iteration:5d}: loss     {loss_val:.4f}")
+
+    # loss_val_t = loss_top.data.cpu().numpy()
+    # print(f"{'':5s}: \t\t\tloss top {loss_val_t:.4f}")
 
     if logger is not None:
         logger.add_scalar("train_loss/total", loss, iteration)
@@ -301,8 +309,8 @@ def train_template_match_im(Xs, Xt, Ys, Yt, model, optimizer, args, iteration, d
 
     optimizer.zero_grad()
 
-    loss1 = BCE_loss_with_ignore(preds, Ys, with_weight=True)
-    loss2 = BCE_loss_with_ignore(predt, Yt, with_weight=True)
+    loss1 = CE_loss_src_target(preds, Ys, mode="source")
+    loss2 = CE_loss_src_target(predt, Yt, mode="forge")
 
     loss = loss1 + loss2
     loss.backward()
@@ -316,7 +324,6 @@ def train_template_match_im(Xs, Xt, Ys, Yt, model, optimizer, args, iteration, d
 
     # loss_val_t = loss_top.data.cpu().numpy()
     # print(f"{'':5s}: \t\t\tloss top {loss_val_t:.4f}")
-
 
     if logger is not None:
         logger.add_scalar("train_loss/total", loss, iteration)

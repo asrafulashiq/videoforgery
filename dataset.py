@@ -650,10 +650,10 @@ class Dataset_image:
             mask_ref = np.zeros(im_orig.shape[:-1], dtype=np.float32)
             mask_tem = np.zeros(im_orig.shape[:-1], dtype=np.float32)
 
-            mask_ref[Y_forge[ind_orig] > 0.5] = 0.5
+            # mask_ref[Y_forge[ind_orig] > 0.5] = 0.5
             mask_ref[Y_orig[ind_orig] > 0.5] = 1
 
-            mask_tem[Y_orig[ind_forge] > 0.5] = 0.5
+            # mask_tem[Y_orig[ind_forge] > 0.5] = 0.5
             mask_tem[Y_forge[ind_forge] > 0.5] = 1
 
             im_f = skimage.transform.resize(
@@ -692,6 +692,13 @@ class Dataset_image:
                 Xtemt[k], Ytemt[k] = tfm_f(Xtem[k], Ytem[k],
                                            other_tfm=other_tfm)
             Xref, Xtem, Yref, Ytem = Xreft, Xtemt, Yreft, Ytemt
+
+            Ytem[Ytem > 0.9] = 1
+            Ytem[Ytem <= 0.9] = 0
+
+            Yref[Yref > 0.9] = 1
+            Yref[Yref <= 0.9] = 0
+
         return Xref, Xtem, Yref, Ytem, name
 
     def load_data_template_match_pair(self, to_tensor=True, is_training=True,
@@ -739,27 +746,27 @@ class Dataset_image:
             Xref2, Xtem2, Yref2, Ytem2, name2 = dat2
             yield dat2
 
-            if is_training and np.random.rand() > 0.8:
-                dat = Xref1, torch.zeros_like(Xtem1), torch.zeros_like(Yref1), \
-                    torch.zeros_like(Ytem1), name1 + "_0"
-                yield dat
-            # mix both
-            if np.random.rand() > 0.7:
-                if to_tensor:
-                    lib = torch
-                else:
-                    lib = np
+            # if is_training and np.random.rand() > 0.8:
+            #     dat = Xref1, torch.zeros_like(Xtem1), torch.zeros_like(Yref1), \
+            #         torch.zeros_like(Ytem1), name1 + "_0"
+            #     yield dat
+            # # mix both
+            # if np.random.rand() > 0.7:
+            #     if to_tensor:
+            #         lib = torch
+            #     else:
+            #         lib = np
 
-                ind2 = np.random.choice(np.arange(Xref2.shape[0]),
-                                        size=Xref1.shape[0])
+            #     ind2 = np.random.choice(np.arange(Xref2.shape[0]),
+            #                             size=Xref1.shape[0])
 
-                Xtem_d = copy.deepcopy(Xtem2[ind2])
-                Yref_d = lib.zeros_like(Yref1)
-                Ytem_d = lib.zeros_like(Yref1)
-                name = name1 + "_" + name2
+            #     Xtem_d = copy.deepcopy(Xtem2[ind2])
+            #     Yref_d = lib.zeros_like(Yref1)
+            #     Ytem_d = lib.zeros_like(Yref1)
+            #     name = name1 + "_" + name2
 
-                dat3 = Xref1, Xtem_d, Yref_d, Ytem_d, name
-                yield dat3
+            #     dat3 = Xref1, Xtem_d, Yref_d, Ytem_d, name
+            #     yield dat3
 
             # Xtem_d = copy.deepcopy(Xtem1[ind1])
             # Yref_d = lib.zeros_like(Yref2)

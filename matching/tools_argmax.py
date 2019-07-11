@@ -92,7 +92,15 @@ class Corr(nn.Module):
 
         ind_max2 = ind_max_o2 - self.ind_arr
 
-        return ind_max1, ind_max2, val1, val2
+        # grid_sample and concat
+        x1_from2 = F.grid_sample(x2, ind_max_o1.permute(0, 2, 3, 1))
+        x1_cat = torch.cat((x1, x1_from2), dim=-3)
+
+        x2_from1 = F.grid_sample(x1, ind_max_o2.permute(0, 2, 3, 1))
+        x2_cat = torch.cat((x2, x2_from1), dim=-3)
+
+
+        return x1_cat, x2_cat, val1, val2
 
 
 def std_mean(x):
@@ -125,12 +133,21 @@ class BusterModel(nn.Module):
             nn.ReLU()
         )
 
+        in_cat = 896
+        # self.corr_conv = nn.Sequential(
+        #     nn.Conv2d(2, 16, 3, padding=1),
+        #     nn.BatchNorm2d(16),
+        #     nn.ReLU(),
+        #     nn.Conv2d(16, 16, 3, padding=1),
+        #     nn.BatchNorm2d(16),
+        #     nn.ReLU()
+        # )
         self.corr_conv = nn.Sequential(
-            nn.Conv2d(2, 16, 3, padding=1),
-            nn.BatchNorm2d(16),
+            nn.Conv2d(in_cat * 2, in_cat, 3, padding=1),
+            nn.BatchNorm2d(in_cat),
             nn.ReLU(),
-            nn.Conv2d(16, 16, 3, padding=1),
-            nn.BatchNorm2d(16),
+            nn.Conv2d(in_cat, in_cat, 3, padding=1),
+            nn.BatchNorm2d(in_cat),
             nn.ReLU()
         )
 
@@ -143,14 +160,14 @@ class BusterModel(nn.Module):
             nn.ReLU()
         )
 
-        self.aspp = models.segmentation.deeplabv3.ASPP(in_channels=32,
+        self.aspp = models.segmentation.deeplabv3.ASPP(in_channels=in_cat + 16,
                                                        atrous_rates=[12, 24, 36])
 
         self.head = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU(256),
-            nn.Conv2d(256, 1, 1)
+            nn.Conv2d(256, 3, 1)
         )
 
         self.head.apply(weights_init_normal)
@@ -161,15 +178,14 @@ class BusterModel(nn.Module):
     def forward(self, x1, x2):
         input1, input2 = x1, x2
         b, c, h, w = x1.shape
-        x1, x1_low = self.encoder(x1, out_size=self.hw)
+        x1, _ = self.encoder(x1, out_size=self.hw)
         # x1 = std_mean(x1)
         x1 = F.normalize(x1, p=2, dim=-3)
-        x2, x2_low = self.encoder(x2, out_size=self.hw)
+        x2, _ = self.encoder(x2, out_size=self.hw)
         x2 = F.normalize(x2, p=2, dim=-3)
         # x2 = std_mean(x2)
 
         xc1, xc2, val1, val2 = self.corrLayer(x1, x2)
-        xc2 = -xc2
 
         xc = torch.cat((xc1, xc2), 0)
         val = torch.cat((val1, val2), 0)
@@ -186,9 +202,6 @@ class BusterModel(nn.Module):
                             align_corners=True)
         out1 = out[:b]
         out2 = out[b:]
-
-        # xc1 = F.interpolate(xc1, size=(h, w), mode='bilinear')
-        # xc2 = F.interpolate(xc2, size=(h, w), mode='bilinear')
 
         return out1, out2
 

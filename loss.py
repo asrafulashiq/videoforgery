@@ -122,17 +122,27 @@ def BCE_loss_with_src(y, labels, with_weight=False, with_logits=True):
                      with_weight=with_weight, with_logits=True)
     return loss1, loss2
 
+def CE_loss_src_target(y, labels, mode="forge", with_logits=True):
+    """
+        mode in "forge", "source"
+    """
+    b, _, h, w = y.shape
+    lab = torch.zeros((b, 3, h, w), dtype=torch.float).to(y.device)
+    labels = labels.squeeze(1)
 
-# def sim_loss(y1, y2, m1, m2):
-#     y2 = -y2
+    if mode == "forge":
+        lab[:, 0] = labels
+        lab[:, 2] = 1 - labels
+    elif mode == "source":
+        lab[:, 1] = labels
+        lab[:, 2] = 1 - labels
+    else:
+        raise ValueError("wrong mode type {}".format(mode))
 
-#     if torch.all(m2 < 0.8) or torch.all(m1 < 0.8):
-#         return 0
+    loss = - lab * F.log_softmax(y, dim=-3)
+    loss = loss.mean()
 
-#     val1 = y1 * (m1.expand_as(y1) > 0.8).type_as(y1)
-#     val2 = y2 * (m2.expand_as(y2) > 0.8).type_as(y1)
-
-#     val1.sum(dim)
+    return loss
 
 
 def CrossEntropy2d(input, target):
