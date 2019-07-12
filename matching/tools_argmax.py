@@ -152,7 +152,8 @@ class BusterModel(nn.Module):
             nn.Conv2d(256, 256, 3, padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU(256),
-            nn.Conv2d(256, 1, 1)
+            nn.Conv2d(256, 1, 1),
+            nn.Sigmoid()
         )
 
         # self.corr_conv_forge = nn.Sequential(
@@ -182,7 +183,8 @@ class BusterModel(nn.Module):
             nn.Conv2d(256, 256, 3, padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU(),
-            nn.Conv2d(256, 1, 1)
+            nn.Conv2d(256, 1, 1),
+            nn.Sigmoid()
         )
 
         self.head_forge.apply(weights_init_normal)
@@ -217,7 +219,7 @@ class BusterModel(nn.Module):
         x_as1 = x_as1 * val1_conv
         x_as2 = x_as2 * val2_conv
 
-        out1 = self.head_mask(x_as1)
+        out1_ = self.head_mask(x_as1)
         out2 = self.head_mask(x_as2)
 
         # # source part
@@ -234,7 +236,12 @@ class BusterModel(nn.Module):
             x2_low, F.interpolate(x_asf2, size=x2_low.shape[-2:],
                                   mode='bilinear', align_corners=True)
         ), dim=-3)
-        out_forge = self.head_forge(x2_cat)
+        out_forge = F.interpolate(self.head_forge(x2_cat),
+                    size=out1_.shape[-2:], mode='bilinear')
+
+        # out_forge = out_forge_ * F.grid_sample(out1_, ind2)
+
+        out1 = out1_ * F.grid_sample(out_forge, ind1)
 
         # out2 = y_forge * F.grid_sample(y_mask, ind2)
         # out1 = y_mask * F.grid_sample(out2, ind1)

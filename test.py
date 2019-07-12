@@ -415,8 +415,8 @@ def test_template_match_im(dataset, model, args, iteration, device,
     model.eval()
     iou_all_s = []
     iou_all_t = []
-
     iou_all_f = []
+
     # Tscore = np.zeros(4)
     for i, ret in enumerate(dataset.load_data_template_match_pair(is_training=False,
                                                                   to_tensor=True, batch=True)):
@@ -425,31 +425,34 @@ def test_template_match_im(dataset, model, args, iteration, device,
             Yt.to(device)
 
         preds, predt, predf = model(Xs, Xt)
-        preds, predt = torch.sigmoid(preds), torch.sigmoid(predt)
-        predf = torch.sigmoid(predf)
+        # preds, predt = torch.sigmoid(preds), torch.sigmoid(predt)
+        # predf = torch.sigmoid(predf)
 
         gt_mask_s = Ys.data.cpu().numpy()
         pred_mask_s = preds.data.cpu().numpy()
 
         f_gt = gt_mask_s
         f_pred = pred_mask_s
-        iou_s, iou_org = tools.iou_mask_with_ignore(f_pred, f_gt,
-                                                    thres=args.thres, return_org=True)
+        iou_s, iou_org = tools.iou_mask_with_ignore(f_pred, f_gt > 0.9,
+                                                    thres=args.thres, return_org=True,
+                                                    with_ignore=False)
         iou_all_s.append(iou_s)
         print(f"\t{i}: s: {iou_s:.4f}\t")
 
-        # ####
+        # # ####
         gt_mask_t = Yt.data.cpu().numpy()
-        pred_mask_t = predt.data.cpu().numpy()
+        # pred_mask_t = predt.data.cpu().numpy()
+
+        # f_gt = gt_mask_t
+        # f_pred = pred_mask_t
+        # iou_t, _ = tools.iou_mask_with_ignore(f_pred, f_gt,
+        #                                    thres=args.thres, return_org=True)
+        
+
+        # iou_all_t.append(iou_t)
+        # print(f"\t{i}: t: {iou_t:.4f}\t")
 
         f_gt = gt_mask_t
-        f_pred = pred_mask_t
-        iou_t, _ = tools.iou_mask_with_ignore(f_pred, f_gt,
-                                           thres=args.thres, return_org=True)
-        
-        iou_all_t.append(iou_t)
-        print(f"\t{i}: t: {iou_t:.4f}\t")
-
         f_predf = predf.data.cpu().numpy()
         iou_f, _ = tools.iou_mask_with_ignore(f_predf, (f_gt > 0.9),
                                               thres=args.thres, return_org=True,
@@ -469,9 +472,9 @@ def test_template_match_im(dataset, model, args, iteration, device,
             logger.add_image(f"Im_{i}/s",
                              fn_norm(Xs[ind_wrs] * lpred[ind_wrs]), iteration)
 
-            lpred = predt.clamp_min(0.06)
-            logger.add_image(f"Im_{i}/t",
-                             fn_norm(Xt[ind_wrs] * lpred[ind_wrs]), iteration)
+            # lpred = predt.clamp_min(0.06)
+            # logger.add_image(f"Im_{i}/t",
+            #                  fn_norm(Xt[ind_wrs] * lpred[ind_wrs]), iteration)
             lpred = predf.clamp_min(0.06)
             logger.add_image(f"Im_{i}/f",
                              fn_norm(Xt[ind_wrs] * lpred[ind_wrs]), iteration)
@@ -482,5 +485,7 @@ def test_template_match_im(dataset, model, args, iteration, device,
         print()
 
     print(f"\nIoU_s: {np.mean(iou_all_s):.4f}")
-    print(f"\nIoU_t: {np.mean(iou_all_t):.4f}")
+    # print(f"\nIoU_t: {np.mean(iou_all_t):.4f}")
+    print(f"\nIoU_f: {np.mean(iou_all_f):.4f}")
+
     # print(f"F1 source: {utils.fscore(Tscore)}")
