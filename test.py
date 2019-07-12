@@ -413,9 +413,9 @@ def test_template_match(dataset, model, args, iteration, device,
 def test_template_match_im(dataset, model, args, iteration, device,
                            logger=None, num=None):
     model.eval()
-    iou_all_s = []
-    iou_all_t = []
-    iou_all_f = []
+    T_s = np.zeros(4)
+    # T_t = []
+    T_f = np.zeros(4)
 
     # Tscore = np.zeros(4)
     for i, ret in enumerate(dataset.load_data_template_match_pair(is_training=False,
@@ -424,68 +424,48 @@ def test_template_match_im(dataset, model, args, iteration, device,
         Xs, Xt, Ys, Yt = Xs.to(device), Xt.to(device), Ys.to(device),\
             Yt.to(device)
 
-        preds, predt, predf = model(Xs, Xt)
-        # preds, predt = torch.sigmoid(preds), torch.sigmoid(predt)
-        # predf = torch.sigmoid(predf)
+        preds, predf = model(Xs, Xt)
 
         gt_mask_s = Ys.data.cpu().numpy()
         pred_mask_s = preds.data.cpu().numpy()
 
         f_gt = gt_mask_s
         f_pred = pred_mask_s
-        iou_s, iou_org = tools.iou_mask_with_ignore(f_pred, f_gt > 0.9,
-                                                    thres=args.thres, return_org=True,
-                                                    with_ignore=False)
-        iou_all_s.append(iou_s)
-        print(f"\t{i}: s: {iou_s:.4f}\t")
+        tt = utils.conf_mat(
+            (f_gt > 0.9).ravel(), (f_pred > args.thres).ravel()
+        ).ravel()
+        T_s += tt
+        print(f"\t{i}: s: {utils.fscore(tt):.4f}\t")
 
         # # ####
         gt_mask_t = Yt.data.cpu().numpy()
-        # pred_mask_t = predt.data.cpu().numpy()
-
-        # f_gt = gt_mask_t
-        # f_pred = pred_mask_t
-        # iou_t, _ = tools.iou_mask_with_ignore(f_pred, f_gt,
-        #                                    thres=args.thres, return_org=True)
-        
-
-        # iou_all_t.append(iou_t)
-        # print(f"\t{i}: t: {iou_t:.4f}\t")
 
         f_gt = gt_mask_t
         f_predf = predf.data.cpu().numpy()
-        iou_f, _ = tools.iou_mask_with_ignore(f_predf, (f_gt > 0.9),
-                                              thres=args.thres, return_org=True,
-                                              with_ignore=False)
-
-        iou_all_f.append(iou_f)
-        print(f"\t{i}: f: {iou_f:.4f}\t")
-
-        # tt = utils.conf_mat(
-        #     (f_gt>0.5).ravel(), f_pred.ravel()).ravel()
-        # Tscore += np.array(tt)
+        tt = utils.conf_mat(
+            (f_gt > 0.9).ravel(), (f_predf > args.thres).ravel()
+        ).ravel()
+        T_f += tt
+        print(f"\t{i}: f: {utils.fscore(tt):.4f}\t")
 
         if logger is not None:
             lpred = preds.clamp_min(0.06)
-            ind_wrs = np.argmin(iou_org)
+            ind_wrs = np.random.choice(Xs.shape[0], size=3)
             def fn_norm(x): return (x-x.min()) / (x.max()-x.min()+1e-8)
-            logger.add_image(f"Im_{i}/s",
+            logger.add_images(f"Im_{i}/s",
                              fn_norm(Xs[ind_wrs] * lpred[ind_wrs]), iteration)
 
-            # lpred = predt.clamp_min(0.06)
-            # logger.add_image(f"Im_{i}/t",
-            #                  fn_norm(Xt[ind_wrs] * lpred[ind_wrs]), iteration)
             lpred = predf.clamp_min(0.06)
-            logger.add_image(f"Im_{i}/f",
+            logger.add_images(f"Im_{i}/f",
                              fn_norm(Xt[ind_wrs] * lpred[ind_wrs]), iteration)
-
 
         if num is not None and i >= num:
             break
         print()
 
-    print(f"\nIoU_s: {np.mean(iou_all_s):.4f}")
-    # print(f"\nIoU_t: {np.mean(iou_all_t):.4f}")
-    print(f"\nIoU_f: {np.mean(iou_all_f):.4f}")
+    print(f"\nT_s: {utils.fscore(T_s):.4f}")
+    print(f"\nT_f: {utils.fscore(T_f):.4f}")
 
-    # print(f"F1 source: {utils.fscore(Tscore)}")
+    if logger is not None:
+        logger.add_scalar("F score/s", utils.fscore(T_s), iteration) 
+        logger.add_scalar("F score/f", utils.fscore(T_f), iteration)

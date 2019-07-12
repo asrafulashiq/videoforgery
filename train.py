@@ -305,7 +305,7 @@ def train_template_match_im(Xs, Xt, Ys, Yt, model, optimizer, args, iteration, d
 
     Xs, Xt, Ys, Yt = Xs.to(device), Xt.to(device), Ys.to(device), Yt.to(device)
 
-    preds, predt, pred_f = model(Xs, Xt)
+    preds, pred_f = model(Xs, Xt)
 
     optimizer.zero_grad()
 

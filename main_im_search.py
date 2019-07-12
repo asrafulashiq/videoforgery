@@ -83,8 +83,6 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(model_params, lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 
-    # if torch.cuda.device_count() > 1:
-    #     model = nn.DataParallel(model)
 
     model.to(device)
 
@@ -113,4 +111,6 @@ if __name__ == "__main__":
                 },
                 "./ckpt/" + model_name + ".pkl",
             )
+            scheduler.step()
+
     logger.close()
