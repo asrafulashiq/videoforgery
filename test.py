@@ -415,6 +415,8 @@ def test_template_match_im(dataset, model, args, iteration, device,
     model.eval()
     iou_all_s = []
     iou_all_t = []
+
+    iou_all_f = []
     # Tscore = np.zeros(4)
     for i, ret in enumerate(dataset.load_data_template_match_pair(is_training=False,
                                                                   to_tensor=True, batch=True)):
@@ -422,11 +424,9 @@ def test_template_match_im(dataset, model, args, iteration, device,
         Xs, Xt, Ys, Yt = Xs.to(device), Xt.to(device), Ys.to(device),\
             Yt.to(device)
 
-        preds, predt = model(Xs, Xt)
-        # preds, predt = F.softmax(preds, dim=-3), F.softmax(predt, dim=-3)
-
-        # preds = preds[:, 1]
-        # predt = predt[:, 0]
+        preds, predt, predf = model(Xs, Xt)
+        preds, predt = torch.sigmoid(preds), torch.sigmoid(predt)
+        predf = torch.sigmoid(predf)
 
         gt_mask_s = Ys.data.cpu().numpy()
         pred_mask_s = preds.data.cpu().numpy()
@@ -450,6 +450,14 @@ def test_template_match_im(dataset, model, args, iteration, device,
         iou_all_t.append(iou_t)
         print(f"\t{i}: t: {iou_t:.4f}\t")
 
+        f_predf = predf.data.cpu().numpy()
+        iou_f, _ = tools.iou_mask_with_ignore(f_predf, (f_gt > 0.9),
+                                              thres=args.thres, return_org=True,
+                                              with_ignore=False)
+
+        iou_all_f.append(iou_f)
+        print(f"\t{i}: f: {iou_f:.4f}\t")
+
         # tt = utils.conf_mat(
         #     (f_gt>0.5).ravel(), f_pred.ravel()).ravel()
         # Tscore += np.array(tt)
@@ -464,6 +472,10 @@ def test_template_match_im(dataset, model, args, iteration, device,
             lpred = predt.clamp_min(0.06)
             logger.add_image(f"Im_{i}/t",
                              fn_norm(Xt[ind_wrs] * lpred[ind_wrs]), iteration)
+            lpred = predf.clamp_min(0.06)
+            logger.add_image(f"Im_{i}/f",
+                             fn_norm(Xt[ind_wrs] * lpred[ind_wrs]), iteration)
+
 
         if num is not None and i >= num:
             break

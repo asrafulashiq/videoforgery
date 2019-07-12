@@ -71,7 +71,7 @@ if __name__ == "__main__":
 
     if args.ckpt is not None:
         checkpoint = torch.load(args.ckpt)
-        model.load_state_dict(checkpoint["model_state"])
+        model.load_state_dict(checkpoint["model_state"], strict=False)
 
     model_params = [
         {"params": model.get_1x_lr_params(), "lr": args.lr / 10},

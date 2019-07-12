@@ -134,38 +134,20 @@ class BusterModel(nn.Module):
         self.val_conv = nn.Sequential(
             nn.Conv2d(topk, 16, 3, padding=1),
             nn.BatchNorm2d(16),
+            nn.Dropout2d(0.3),
             nn.ReLU(),
             nn.Conv2d(16, 16, 3, padding=1),
+            nn.Dropout2d(0.3),
             nn.BatchNorm2d(16),
-            nn.ReLU()
-        )
-
-        self.corr_conv_forge = nn.Sequential(
-            nn.Conv2d(in_cat * 2, in_cat, 3, padding=1),
-            nn.BatchNorm2d(in_cat),
             nn.ReLU(),
-            nn.Conv2d(in_cat, in_cat, 3, padding=1),
-            nn.BatchNorm2d(in_cat),
-            nn.ReLU()
+            nn.Conv2d(16, 16, 3, padding=1),
+            nn.Conv2d(16, 1, 1),
+            nn.Sigmoid()
         )
 
-        self.corr_conv_mask = nn.Sequential(
-            nn.Conv2d(in_cat, in_cat, 1),
-            nn.BatchNorm2d(in_cat),
-            nn.ReLU()
-        )
+        self.aspp = models.segmentation.deeplabv3.ASPP(in_channels=in_cat,
+                                                       atrous_rates=[12, 24, 36])
 
-        self.aspp_forge = models.segmentation.deeplabv3.ASPP(in_channels=in_cat + 16,
-                                                             atrous_rates=[12, 24, 36])
-        self.head_forge = nn.Sequential(
-            nn.Conv2d(256, 256, 3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(256),
-            nn.Conv2d(256, 1, 1)
-        )
-
-        self.aspp_mask = models.segmentation.deeplabv3.ASPP(in_channels=in_cat + 16,
-                                                            atrous_rates=[12, 24, 36])
         self.head_mask = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1),
             nn.BatchNorm2d(256),
@@ -173,20 +155,50 @@ class BusterModel(nn.Module):
             nn.Conv2d(256, 1, 1)
         )
 
+        # self.corr_conv_forge = nn.Sequential(
+        #     nn.Conv2d(in_cat * 2, in_cat, 3, padding=1),
+        #     nn.BatchNorm2d(in_cat),
+        #     nn.ReLU(),
+        #     nn.Conv2d(in_cat, in_cat, 3, padding=1),
+        #     nn.BatchNorm2d(in_cat),
+        #     nn.ReLU()
+        # )
+
+        # self.corr_conv_mask = nn.Sequential(
+        #     nn.Conv2d(in_cat, in_cat, 1),
+        #     nn.BatchNorm2d(in_cat),
+        #     nn.ReLU()
+        # )
+
+        self.aspp_forge = models.segmentation.deeplabv3.ASPP(in_channels=in_cat,
+                                                             atrous_rates=[12, 24, 36])
+
+        self.low_conv = nn.Sequential(nn.Conv2d(128, 128, 1), nn.BatchNorm2d(128),
+                                      nn.ReLU())
+        self.head_forge = nn.Sequential(
+            nn.Conv2d(256+128, 256, 1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.Conv2d(256, 256, 3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.Conv2d(256, 1, 1)
+        )
+
         self.head_forge.apply(weights_init_normal)
         self.head_mask.apply(weights_init_normal)
 
-        # self.low_conv.apply(weights_init_normal)
-        self.corr_conv_mask.apply(weights_init_normal)
+        self.low_conv.apply(weights_init_normal)
+        # self.corr_conv_mask.apply(weights_init_normal)
         self.val_conv.apply(weights_init_normal)
-        self.corr_conv_forge.apply(weights_init_normal)
+        # self.corr_conv_forge.apply(weights_init_normal)
 
     def forward(self, x1, x2):
         input1, input2 = x1, x2
         b, c, h, w = x1.shape
         x1, _ = self.encoder(x1, out_size=self.hw)
         # x1 = std_mean(x1)
-        x2, _ = self.encoder(x2, out_size=self.hw)
+        x2, x2_low = self.encoder(x2, out_size=self.hw)
 
         # x2 = std_mean(x2)
 
@@ -197,27 +209,45 @@ class BusterModel(nn.Module):
         val1_conv = val_c[:b]
         val2_conv = val_c[b:]
 
-        # source part
-        xc1_conv = self.corr_conv_mask(x1)
-        x_aspp_mask = self.aspp_mask(torch.cat((xc1_conv, val1_conv), dim=-3))
-        y_mask = torch.sigmoid(self.head_mask(x_aspp_mask))
+        # get mask of both
+        x_as1 = self.aspp(x1)
+        x_as2 = self.aspp(x2)
+
+        # attention from similarity mask
+        x_as1 = x_as1 * val1_conv
+        x_as2 = x_as2 * val2_conv
+
+        out1 = self.head_mask(x_as1)
+        out2 = self.head_mask(x_as2)
+
+        # # source part
+        # xc1_conv = self.corr_conv_mask(x1)
+        # x_aspp_mask = self.aspp_mask(torch.cat((xc1_conv, val1_conv), dim=-3))
+        # y_mask = torch.sigmoid(self.head_mask(x_aspp_mask))
 
         # forge part
-        xc2_conv = self.corr_conv_forge(xc2)
-        x_aspp_forge = self.aspp_forge(
-            torch.cat((xc2_conv, val2_conv), dim=-3))
-        y_forge = torch.sigmoid(self.head_forge(x_aspp_forge))
+        x_asf2 = self.aspp_forge(x2)
+        x_asf2 = x_asf2 * val2_conv
 
-        
-        out2 = y_forge * F.grid_sample(y_mask, ind2)
-        out1 = y_mask * F.grid_sample(out2, ind1)
+        x2_low = self.low_conv(x2_low)
+        x2_cat = torch.cat((
+            x2_low, F.interpolate(x_asf2, size=x2_low.shape[-2:],
+                                  mode='bilinear', align_corners=True)
+        ), dim=-3)
+        out_forge = self.head_forge(x2_cat)
+
+        # out2 = y_forge * F.grid_sample(y_mask, ind2)
+        # out1 = y_mask * F.grid_sample(out2, ind1)
 
         out1 = F.interpolate(out1, size=(h, w), mode='bilinear',
                              align_corners=True)
         out2 = F.interpolate(out2, size=(h, w), mode='bilinear',
                              align_corners=True)
 
-        return out1, out2
+        out_forge = F.interpolate(out_forge, size=(h, w), mode='bilinear',
+                                  align_corners=True)
+
+        return out1, out2, out_forge
 
     def set_bn_to_eval(self):
         def fn(m):
@@ -237,10 +267,12 @@ class BusterModel(nn.Module):
                             yield p
 
     def get_10x_lr_params(self):
-        modules = [self.aspp_mask, self.aspp_forge,
-                   self.corrLayer, self.corr_conv_forge,
-                   self.corr_conv_mask, self.head_mask,
-                   self.head_forge, self.val_conv]
+        # modules = [self.aspp_mask, self.aspp_forge,
+        #            self.corrLayer, self.corr_conv_forge,
+        #            self.corr_conv_mask, self.head_mask,
+        #            self.head_forge, self.val_conv]
+        modules = [self.aspp, self.head_mask, self.val_conv, self.corrLayer,
+                   self.aspp_forge, self.low_conv, self.head_forge]
         for i in range(len(modules)):
             for m in modules[i].named_modules():
                 if isinstance(m[1], nn.Conv2d) \

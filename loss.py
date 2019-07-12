@@ -64,12 +64,16 @@ def BCE_loss(y, labels, with_weight=False, with_logits=True):
     return bce_loss.float()
 
 
-def BCE_loss_with_ignore(y, labels, with_weight=False, with_logits=True):
+def BCE_loss_with_ignore(y, labels, with_weight=False, with_logits=True,
+                         with_ignore=True):
     eps = 1e-8
     y = y.contiguous().view(-1)
     labels = labels.contiguous().view(-1)
 
-    ignore_ind = ((labels > 0.4) & (labels < 0.6))
+    if with_ignore:
+        ignore_ind = ((labels > 0.4) & (labels < 0.6))
+    else:
+        ignore_ind = torch.zeros_like(labels, dtype=torch.bool).byte().to(y.device)
 
     ind_pos = (labels > 0.9) & ~ignore_ind
     ind_neg = (labels < 0.1) & ~ignore_ind
@@ -87,10 +91,11 @@ def BCE_loss_with_ignore(y, labels, with_weight=False, with_logits=True):
     wgt[ignore_ind] = 0
 
     if with_logits:
-        bce_loss = F.binary_cross_entropy_with_logits(y, labels, wgt, reduction='none')
+        bce_loss = F.binary_cross_entropy_with_logits(
+            y, labels, wgt, reduction='none')
     else:
         bce_loss = F.binary_cross_entropy(y, labels, wgt, reduction='none')
-    
+
     bce_loss = bce_loss.sum() / wgt.sum()
 
     if torch.isnan(bce_loss) or bce_loss < 0:
@@ -121,6 +126,7 @@ def BCE_loss_with_src(y, labels, with_weight=False, with_logits=True):
     loss2 = BCE_loss(y[:, 1], labels[:, 1],
                      with_weight=with_weight, with_logits=True)
     return loss1, loss2
+
 
 def CE_loss_src_target(y, labels, mode="forge", with_logits=True):
     """

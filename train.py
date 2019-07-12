@@ -305,16 +305,21 @@ def train_template_match_im(Xs, Xt, Ys, Yt, model, optimizer, args, iteration, d
 
     Xs, Xt, Ys, Yt = Xs.to(device), Xt.to(device), Ys.to(device), Yt.to(device)
 
-    preds, predt = model(Xs, Xt)
+    preds, predt, pred_f = model(Xs, Xt)
 
     optimizer.zero_grad()
 
     loss1 = BCE_loss_with_ignore(
-        preds, Ys, with_weight=True, with_logits=False)
+        preds, Ys, with_weight=True, with_logits=True)
     loss2 = BCE_loss_with_ignore(
-        predt, Yt, with_weight=True, with_logits=False)
+        predt, Yt, with_weight=True, with_logits=True)
 
-    loss = 0.5 * (loss1 + loss2)
+    loss3 = BCE_loss_with_ignore(
+        pred_f, (Yt > 0.9).type_as(pred_f), with_weight=True,
+        with_logits=True, with_ignore=False
+    )
+
+    loss = 0.5 * (loss1 + loss2) + loss3
     loss.backward()
 
     # loss.backward()

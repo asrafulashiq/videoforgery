@@ -43,8 +43,6 @@ class Corr(nn.Module):
         return out1, out2
 
 
-
-
 def std_mean(x):
     return (x-x.mean(dim=-3, keepdim=True))/(1e-8+x.std(dim=-3, keepdim=True))
 
@@ -98,14 +96,14 @@ class CustomConv(nn.Module):
                 in_c = out_channel
             layers.append(
                 nn.Conv2d(in_c, out_channel, kernel_size,
-                padding=kernel_size//2)
+                          padding=kernel_size//2)
             )
             if activation is not None:
                 layers.append(nn.ReLU())
         if pool is not None:
             layers.append(nn.MaxPool2d(2, stride=2))
         self.layers = nn.Sequential(*layers)
-    
+
     def forward(self, x):
         x = self.layers(x)
         return x
@@ -126,7 +124,6 @@ class Encoder(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
 
-
         return x
 
 
@@ -137,7 +134,7 @@ class BNInception(nn.Module):
         for filt in filt_list:
             layers.append(
                 nn.Conv2d(in_channel, out_channel, kernel_size=filt,
-                padding=filt//2)
+                          padding=filt//2)
             )
         self.layers = nn.ModuleList(layers)
         self.bn = nn.BatchNorm2d(len(filt_list) * out_channel)
@@ -169,7 +166,7 @@ class Decoder(nn.Module):
     def forward(self, x):
         x = self.binc1(x)
         x = F.interpolate(x, scale_factor=2, mode='bilinear')
-        
+
         x1 = self.binc2(x)
         x = torch.cat((
             F.interpolate(x, scale_factor=2, mode='bilinear'),
@@ -197,7 +194,6 @@ class Decoder(nn.Module):
         out = self.last_conv(x)
 
         return out
-
 
 
 class FeatureExtractor(nn.Module):
@@ -386,12 +382,17 @@ def iou_mask(mask1, mask2):
     return val
 
 
-def iou_mask_with_ignore(mask_pred, mask_gt, thres=0.5, return_org=False):
-    ignore_mask = (mask_gt > 0.45) & (mask_gt < 0.55)
+def iou_mask_with_ignore(mask_pred, mask_gt, thres=0.5, return_org=False,
+                         with_ignore=True):
 
-    intersection = np.sum((mask_pred > thres) & (mask_gt > 0.5) & ~ignore_mask,
+    if with_ignore:
+        ignore_mask = (mask_gt > 0.45) & (mask_gt < 0.55)
+    else:
+        ignore_mask = np.zeros_like(mask_gt, dtype=np.bool)
+
+    intersection = np.sum((mask_pred > thres) & (mask_gt > 0.8) & ~ignore_mask,
                           axis=(-1, -2))
-    union = np.sum((mask_gt > 0.5) | (mask_pred > thres) & ~ignore_mask,
+    union = np.sum((mask_gt > 0.8) | (mask_pred > thres) & ~ignore_mask,
                    axis=(-1, -2))
     iou = intersection / (union + 1e-8)
     iou_org = iou.ravel()
