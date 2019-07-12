@@ -44,7 +44,7 @@ def _zero_window(x_in, h, w, rat_s=0.1):
 
 
 class Corr(nn.Module):
-    def __init__(self, hw=(60, 60), topk=10):
+    def __init__(self, hw=(60, 60), topk=3):
         super().__init__()
         self.h = hw[0]
         self.w = hw[1]
@@ -66,8 +66,10 @@ class Corr(nn.Module):
         b, c, h1, w1 = x1.shape
         _, _, h2, w2 = x2.shape
 
-        x_c_o = torch.matmul(x1.permute(0, 2, 3, 1).view(b, -1, c),
-                             x2.view(b, c, -1))  # h1 * w1, h2 * w2
+        x1n = F.normalize(x1, p=2, dim=-3)
+        x2n = F.normalize(x2, p=2, dim=-3)
+        x_c_o = torch.matmul(x1n.permute(0, 2, 3, 1).view(b, -1, c),
+                             x2n.view(b, c, -1))  # h1 * w1, h2 * w2
         x_c = F.softmax(x_c_o*self.alpha, dim=-1) * \
             F.softmax(x_c_o*self.alpha, dim=-2)
         x_c = x_c.reshape(b, h1, w1, h2, w2)
@@ -99,8 +101,8 @@ class Corr(nn.Module):
         x2_from1 = F.grid_sample(x1, ind_max_o2.permute(0, 2, 3, 1))
         x2_cat = torch.cat((x2, x2_from1), dim=-3)
 
-
-        return x1_cat, x2_cat, val1, val2
+        return x1_cat, x2_cat, val1, val2, ind_max_o1.permute(0, 2, 3, 1), \
+            ind_max_o2.permute(0, 2, 3, 1)
 
 
 def std_mean(x):
@@ -127,29 +129,7 @@ class BusterModel(nn.Module):
 
         self.corrLayer = Corr(hw=hw, topk=topk)
 
-        self.low_conv = nn.Sequential(
-            nn.Conv2d(128, 128, 1),
-            nn.BatchNorm2d(128),
-            nn.ReLU()
-        )
-
         in_cat = 896
-        # self.corr_conv = nn.Sequential(
-        #     nn.Conv2d(2, 16, 3, padding=1),
-        #     nn.BatchNorm2d(16),
-        #     nn.ReLU(),
-        #     nn.Conv2d(16, 16, 3, padding=1),
-        #     nn.BatchNorm2d(16),
-        #     nn.ReLU()
-        # )
-        self.corr_conv = nn.Sequential(
-            nn.Conv2d(in_cat * 2, in_cat, 3, padding=1),
-            nn.BatchNorm2d(in_cat),
-            nn.ReLU(),
-            nn.Conv2d(in_cat, in_cat, 3, padding=1),
-            nn.BatchNorm2d(in_cat),
-            nn.ReLU()
-        )
 
         self.val_conv = nn.Sequential(
             nn.Conv2d(topk, 16, 3, padding=1),
@@ -160,48 +140,82 @@ class BusterModel(nn.Module):
             nn.ReLU()
         )
 
-        self.aspp = models.segmentation.deeplabv3.ASPP(in_channels=in_cat + 16,
-                                                       atrous_rates=[12, 24, 36])
+        self.corr_conv_forge = nn.Sequential(
+            nn.Conv2d(in_cat * 2, in_cat, 3, padding=1),
+            nn.BatchNorm2d(in_cat),
+            nn.ReLU(),
+            nn.Conv2d(in_cat, in_cat, 3, padding=1),
+            nn.BatchNorm2d(in_cat),
+            nn.ReLU()
+        )
 
-        self.head = nn.Sequential(
+        self.corr_conv_mask = nn.Sequential(
+            nn.Conv2d(in_cat, in_cat, 1),
+            nn.BatchNorm2d(in_cat),
+            nn.ReLU()
+        )
+
+        self.aspp_forge = models.segmentation.deeplabv3.ASPP(in_channels=in_cat + 16,
+                                                             atrous_rates=[12, 24, 36])
+        self.head_forge = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU(256),
-            nn.Conv2d(256, 3, 1)
+            nn.Conv2d(256, 1, 1)
         )
 
-        self.head.apply(weights_init_normal)
-        self.low_conv.apply(weights_init_normal)
-        self.corr_conv.apply(weights_init_normal)
+        self.aspp_mask = models.segmentation.deeplabv3.ASPP(in_channels=in_cat + 16,
+                                                            atrous_rates=[12, 24, 36])
+        self.head_mask = nn.Sequential(
+            nn.Conv2d(256, 256, 3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(256),
+            nn.Conv2d(256, 1, 1)
+        )
+
+        self.head_forge.apply(weights_init_normal)
+        self.head_mask.apply(weights_init_normal)
+
+        # self.low_conv.apply(weights_init_normal)
+        self.corr_conv_mask.apply(weights_init_normal)
         self.val_conv.apply(weights_init_normal)
+        self.corr_conv_forge.apply(weights_init_normal)
 
     def forward(self, x1, x2):
         input1, input2 = x1, x2
         b, c, h, w = x1.shape
         x1, _ = self.encoder(x1, out_size=self.hw)
         # x1 = std_mean(x1)
-        x1 = F.normalize(x1, p=2, dim=-3)
         x2, _ = self.encoder(x2, out_size=self.hw)
-        x2 = F.normalize(x2, p=2, dim=-3)
+
         # x2 = std_mean(x2)
 
-        xc1, xc2, val1, val2 = self.corrLayer(x1, x2)
+        xc1, xc2, val1, val2, ind1, ind2 = self.corrLayer(x1, x2)
 
-        xc = torch.cat((xc1, xc2), 0)
         val = torch.cat((val1, val2), 0)
-
-        x_c = self.corr_conv(xc)
         val_c = self.val_conv(val)
-        # x1_low = self.low_conv(x1_low)
-        # x_low_c = torch.cat((x1_low, x1_c, val1_c), dim=-3)
-        x_low_c = torch.cat((x_c, val_c), dim=-3)
+        val1_conv = val_c[:b]
+        val2_conv = val_c[b:]
 
-        out = self.aspp(x_low_c)
-        out = self.head(out)
-        out = F.interpolate(out, size=(h, w), mode='bilinear',
-                            align_corners=True)
-        out1 = out[:b]
-        out2 = out[b:]
+        # source part
+        xc1_conv = self.corr_conv_mask(x1)
+        x_aspp_mask = self.aspp_mask(torch.cat((xc1_conv, val1_conv), dim=-3))
+        y_mask = torch.sigmoid(self.head_mask(x_aspp_mask))
+
+        # forge part
+        xc2_conv = self.corr_conv_forge(xc2)
+        x_aspp_forge = self.aspp_forge(
+            torch.cat((xc2_conv, val2_conv), dim=-3))
+        y_forge = torch.sigmoid(self.head_forge(x_aspp_forge))
+
+        
+        out2 = y_forge * F.grid_sample(y_mask, ind2)
+        out1 = y_mask * F.grid_sample(out2, ind1)
+
+        out1 = F.interpolate(out1, size=(h, w), mode='bilinear',
+                             align_corners=True)
+        out2 = F.interpolate(out2, size=(h, w), mode='bilinear',
+                             align_corners=True)
 
         return out1, out2
 
@@ -223,8 +237,10 @@ class BusterModel(nn.Module):
                             yield p
 
     def get_10x_lr_params(self):
-        modules = [self.aspp, self.corrLayer, self.low_conv, self.corr_conv,
-                   self.head, self.val_conv]
+        modules = [self.aspp_mask, self.aspp_forge,
+                   self.corrLayer, self.corr_conv_forge,
+                   self.corr_conv_mask, self.head_mask,
+                   self.head_forge, self.val_conv]
         for i in range(len(modules)):
             for m in modules[i].named_modules():
                 if isinstance(m[1], nn.Conv2d) \

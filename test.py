@@ -423,13 +423,10 @@ def test_template_match_im(dataset, model, args, iteration, device,
             Yt.to(device)
 
         preds, predt = model(Xs, Xt)
-        preds, predt = F.softmax(preds, dim=-3), F.softmax(predt, dim=-3)
+        # preds, predt = F.softmax(preds, dim=-3), F.softmax(predt, dim=-3)
 
-        preds = preds[:, 1]
-        predt = predt[:, 0]
-    
-        Ys = Ys.squeeze(1)
-        Yt = Yt.squeeze(1)
+        # preds = preds[:, 1]
+        # predt = predt[:, 0]
 
         gt_mask_s = Ys.data.cpu().numpy()
         pred_mask_s = preds.data.cpu().numpy()

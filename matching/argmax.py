@@ -156,7 +156,7 @@ class SoftArgmax2D(torch.nn.Module):
             self.window_fn = _parzen_torch
         elif window_fn == "Uniform":
             self.window_fn = _uniform_window
-        self.wt = wt
+        self.wt = torch.nn.Parameter(torch.tensor(wt, dtype=torch.float)).cuda()
 
     def _softmax_2d(self, x, temp):
         """

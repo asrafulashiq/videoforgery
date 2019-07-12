@@ -309,10 +309,12 @@ def train_template_match_im(Xs, Xt, Ys, Yt, model, optimizer, args, iteration, d
 
     optimizer.zero_grad()
 
-    loss1 = CE_loss_src_target(preds, Ys, mode="source")
-    loss2 = CE_loss_src_target(predt, Yt, mode="forge")
+    loss1 = BCE_loss_with_ignore(
+        preds, Ys, with_weight=True, with_logits=False)
+    loss2 = BCE_loss_with_ignore(
+        predt, Yt, with_weight=True, with_logits=False)
 
-    loss = loss1 + loss2
+    loss = 0.5 * (loss1 + loss2)
     loss.backward()
 
     # loss.backward()
