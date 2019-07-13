@@ -83,7 +83,6 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(model_params, lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 
-
     model.to(device)
 
     if args.test:
@@ -102,7 +101,7 @@ if __name__ == "__main__":
             test_template_match_im(dataset, model, args, iteration, device,
                                    logger=logger, num=10)
             state = model.module.state_dict() if isinstance(model, nn.DataParallel) \
-                    else model.state_dict()
+                else model.state_dict()
             torch.save(
                 {
                     "epoch": ep,

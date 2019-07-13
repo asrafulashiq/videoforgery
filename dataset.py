@@ -650,10 +650,10 @@ class Dataset_image:
             mask_ref = np.zeros(im_orig.shape[:-1], dtype=np.float32)
             mask_tem = np.zeros(im_orig.shape[:-1], dtype=np.float32)
 
-            mask_ref[Y_forge[ind_orig] > 0.5] = 0.5
+            # mask_ref[Y_forge[ind_orig] > 0.5] = 0.5
             mask_ref[Y_orig[ind_orig] > 0.5] = 1
 
-            mask_tem[Y_orig[ind_forge] > 0.5] = 0.5
+            # mask_tem[Y_orig[ind_forge] > 0.5] = 0.5
             mask_tem[Y_forge[ind_forge] > 0.5] = 1
 
             im_f = skimage.transform.resize(
@@ -720,7 +720,10 @@ class Dataset_image:
             Yref = fn_cat((Yref1, Yref2), 0)
             Ytem = fn_cat((Ytem1, Ytem2), 0)
             name = name1 + "_" + name2
-            return Xref, Xtem, Yref, Ytem, name
+            total = Xref1.shape[0] + Xref2.shape[0]
+            ind_rand = np.random.choice(total, size = Xref1.shape[0],
+                                        replace=False)
+            return Xref[ind_rand], Xtem[ind_rand], Yref[ind_rand], Ytem[ind_rand], name
 
         loader = self.load_videos_all(is_training=is_training,
                                       to_tensor=False)
@@ -748,34 +751,25 @@ class Dataset_image:
             Xref2, Xtem2, Yref2, Ytem2, name2 = dat2
             yield dat2
 
-            # if is_training and np.random.rand() > 0.8:
-            #     dat = Xref1, torch.zeros_like(Xtem1), torch.zeros_like(Yref1), \
-            #         torch.zeros_like(Ytem1), name1 + "_0"
-            #     yield dat
-            # # mix both
-            # if np.random.rand() > 0.7:
-            #     if to_tensor:
-            #         lib = torch
-            #     else:
-            #         lib = np
+            if is_training and np.random.rand() > 0.8:
+                dat = Xref1, torch.zeros_like(Xtem1), torch.zeros_like(Yref1), \
+                    torch.zeros_like(Ytem1), name1 + "_0"
+                yield mixer(dat1, dat, torch)
+            # mix both
+            if np.random.rand() > 0.6:
+                if to_tensor:
+                    lib = torch
+                else:
+                    lib = np
 
-            #     ind2 = np.random.choice(np.arange(Xref2.shape[0]),
-            #                             size=Xref1.shape[0])
+                ind2 = np.random.choice(np.arange(Xref2.shape[0]),
+                                        size=Xref1.shape[0])
 
-            #     Xtem_d = copy.deepcopy(Xtem2[ind2])
-            #     Yref_d = lib.zeros_like(Yref1)
-            #     Ytem_d = lib.zeros_like(Yref1)
-            #     name = name1 + "_" + name2
+                Xtem_d = copy.deepcopy(Xtem2[ind2])
+                Yref_d = lib.zeros_like(Yref1)
+                Ytem_d = lib.zeros_like(Yref1)
+                name = name1 + "_" + name2
 
-            #     dat3 = Xref1, Xtem_d, Yref_d, Ytem_d, name
-            #     yield dat3
+                dat3 = Xref1, Xtem_d, Yref_d, Ytem_d, name
 
-            # Xtem_d = copy.deepcopy(Xtem1[ind1])
-            # Yref_d = lib.zeros_like(Yref2)
-            # Ytem_d = lib.zeros_like(Yref2)
-            # name = name2 + "_" + name1
-
-            # dat4 = Xref2, Xtem_d, Yref_d, Ytem_d, name
-
-            # yield mixer(dat1, dat3, lib)
-            # yield mixer(dat2, dat4, lib)
+                yield mixer(dat1, dat3, lib)
