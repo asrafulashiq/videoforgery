@@ -627,7 +627,7 @@ class Dataset_image:
         else:
             batch_size = min(self.args.batch_size, len(forge_time))
             ind = np.arange(forge_time.size)
-            np.random.shuffle(ind)
+            # np.random.shuffle(ind)
             forge_time = forge_time[ind]
             gt_time = gt_time[ind]
 
@@ -693,13 +693,13 @@ class Dataset_image:
                                            other_tfm=other_tfm)
             Xref, Xtem, Yref, Ytem = Xreft, Xtemt, Yreft, Ytemt
 
-            Ytem[Ytem > 0.8] = 1
-            Ytem[Ytem <= 0.2] = 0
-            Ytem[(Ytem > 0.2) & (Ytem <= 0.8)] = 0.5
+            Ytem[Ytem > 0.5] = 1
+            Ytem[Ytem <= 0.5] = 0
+            # Ytem[(Ytem > 0.2) & (Ytem <= 0.8)] = 0.5
 
-            Yref[Yref > 0.8] = 1
-            Yref[Yref <= 0.2] = 0
-            Yref[(Yref > 0.2) & (Yref <= 0.8)] = 0.5
+            Yref[Yref > 0.5] = 1
+            Yref[Yref <= 0.5] = 0
+            # Yref[(Yref > 0.2) & (Yref <= 0.8)] = 0.5
 
         return Xref, Xtem, Yref, Ytem, name
 
@@ -730,46 +730,46 @@ class Dataset_image:
         while True:
             try:
                 ret1 = next(loader)
-                ret2 = next(loader)
+                # ret2 = next(loader)
             except StopIteration:
                 return
             dat1 = self._load(
                 ret1, to_tensor=to_tensor, batch=batch, is_training=is_training)
-            dat2 = self._load(
-                ret2, to_tensor=to_tensor, batch=batch, is_training=is_training)
+            # dat2 = self._load(
+            #     ret2, to_tensor=to_tensor, batch=batch, is_training=is_training)
 
             if dat1 is None:
                 continue
 
-            Xref1, Xtem1, Yref1, Ytem1, name1 = dat1
+            # Xref1, Xtem1, Yref1, Ytem1, name1 = dat1
 
             yield dat1
 
-            if dat2 is None:
-                continue
+            # if dat2 is None:
+            #     continue
 
-            Xref2, Xtem2, Yref2, Ytem2, name2 = dat2
-            yield dat2
+            # Xref2, Xtem2, Yref2, Ytem2, name2 = dat2
+            # yield dat2
 
-            if is_training and np.random.rand() > 0.8:
-                dat = Xref1, torch.zeros_like(Xtem1), torch.zeros_like(Yref1), \
-                    torch.zeros_like(Ytem1), name1 + "_0"
-                yield mixer(dat1, dat, torch)
-            # mix both
-            if np.random.rand() > 0.6:
-                if to_tensor:
-                    lib = torch
-                else:
-                    lib = np
+            # if is_training and np.random.rand() > 0.8:
+            #     dat = Xref1, torch.zeros_like(Xtem1), torch.zeros_like(Yref1), \
+            #         torch.zeros_like(Ytem1), name1 + "_0"
+            #     yield mixer(dat1, dat, torch)
+            # # mix both
+            # if np.random.rand() > 0.6:
+            #     if to_tensor:
+            #         lib = torch
+            #     else:
+            #         lib = np
 
-                ind2 = np.random.choice(np.arange(Xref2.shape[0]),
-                                        size=Xref1.shape[0])
+            #     ind2 = np.random.choice(np.arange(Xref2.shape[0]),
+            #                             size=Xref1.shape[0])
 
-                Xtem_d = copy.deepcopy(Xtem2[ind2])
-                Yref_d = lib.zeros_like(Yref1)
-                Ytem_d = lib.zeros_like(Yref1)
-                name = name1 + "_" + name2
+            #     Xtem_d = copy.deepcopy(Xtem2[ind2])
+            #     Yref_d = lib.zeros_like(Yref1)
+            #     Ytem_d = lib.zeros_like(Yref1)
+            #     name = name1 + "_" + name2
 
-                dat3 = Xref1, Xtem_d, Yref_d, Ytem_d, name
+            #     dat3 = Xref1, Xtem_d, Yref_d, Ytem_d, name
 
-                yield mixer(dat1, dat3, lib)
+            #     yield mixer(dat1, dat3, lib)

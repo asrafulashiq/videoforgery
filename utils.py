@@ -1,3 +1,4 @@
+from scipy.ndimage import morphology
 from torch import nn
 from torch.nn import functional as F
 import torch
@@ -9,6 +10,9 @@ import skimage
 import imutils
 from skimage import io
 from skimage import transform
+
+from scipy.ndimage import morphology
+from scipy.ndimage import measurements
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
@@ -96,6 +100,19 @@ class CustomTransform:
                 mask = cv2.resize(
                     mask, self.size, interpolation=cv2.INTER_NEAREST)
         return img, mask
+
+    def inverse(self, x):
+        if x.is_cuda:
+            x = x.squeeze().data.cpu().numpy()
+        else:
+            x = x.squeeze().data.numpy()
+        if len(x.shape) < 3:
+            pass
+        else:
+            x = x.transpose((1, 2, 0))
+            x = x * self.std + self.mean
+        return x
+
 
     def __call__(self, img=None, mask=None, other_tfm=None):
         img, mask = self.resize(img, mask)
@@ -383,5 +400,65 @@ class MultiPagePdf:
     def final(self):
         with PdfPages(self.out_name) as pdf:
             for fig in self.figs:
+                fig.tight_layout()
                 pdf.savefig(fig)
         plt.close("all")
+
+
+class Preprocessor():
+    def __init__(self, args):
+        self.args = args
+
+    # morphological preprocessing
+    def morph(self, mask):
+        # threshold
+        mask = mask > self.args.thres
+
+        # do closing
+        mask_closed = morphology.binary_closing(mask, structure=np.ones((5, 5)))
+
+        # do opening
+        mask_opened = morphology.binary_closing(
+            mask_closed, structure=np.ones((5, 5)))
+
+        # hole filling
+        mask_filled = morphology.binary_fill_holes(
+            mask_opened, structure=np.ones((8, 8)))
+
+        # get maximum connected component
+        labels, _ = measurements.label(mask_filled)
+        if len(np.unique(labels)) == 1:
+            return np.zeros_like(mask)
+
+        mask_maxlab = labels == np.argmax(np.bincount(labels.flat)[1:])+1
+
+        return mask_maxlab.astype(np.float)
+
+    def calc_hist(self, im, mask=None):
+        # convert to hsv color space
+        im = skimage.img_as_ubyte(im)
+        mask = skimage.img_as_ubyte(mask)
+        im_hsv = cv2.cvtColor(im, cv2.COLOR_RGB2HSV)
+
+        h_bins = 50
+        s_bins = 50
+        histSize = [h_bins, s_bins]
+        # hue varies from 0 to 179, saturation from 0 to 255
+        h_ranges = [0, 180]
+        s_ranges = [0, 256]
+        ranges = h_ranges + s_ranges  # concat lists
+        # Use the 0-th and 1-st channels
+        channels = [0, 1]
+
+        hist_base = cv2.calcHist([im_hsv], channels, mask,
+                                 histSize, ranges, accumulate=False)
+        cv2.normalize(hist_base, hist_base, alpha=0,
+                     beta=1, norm_type=cv2.NORM_MINMAX)
+        return hist_base
+
+    def comp_hist(self, x1, x2, mask1=None, mask2=None, compare_method=0):
+        hist1 = self.calc_hist(x1, mask1)
+        hist2 = self.calc_hist(x2, mask2)
+
+        value = cv2.compareHist(hist1, hist2, compare_method)
+        return value

@@ -39,8 +39,6 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
-    #! TEMPORARY
-    # args.videoset = 'tmp_youtube'
 
     # model name
     model_name = args.model + "_" + args.model_type + "_" + \
