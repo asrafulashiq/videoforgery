@@ -70,6 +70,16 @@ class Corr(nn.Module):
         x2n = F.normalize(x2, p=2, dim=-3)
         x_c_o = torch.matmul(x1n.permute(0, 2, 3, 1).view(b, -1, c),
                              x2n.view(b, c, -1))  # h1 * w1, h2 * w2
+
+        x1_soft = x_c_o.reshape(b, h1, w1, -1).permute(0, 3, 1, 2)
+        x1_soft = _zero_window(x1_soft, h2, w2, rat_s=0.15)
+        x1_soft = F.softmax(x1_soft * self.alpha, dim=-3)
+
+        x2_soft = x_c_o.reshape(b, h1 * w1, h2, w2)
+        x2_soft = _zero_window(x2_soft, h1, w1, rat_s=0.15)
+        x2_soft = F.softmax(x2_soft * self.alpha, dim=-3)
+
+        
         x_c = F.softmax(x_c_o*self.alpha, dim=-1) * \
             F.softmax(x_c_o*self.alpha, dim=-2)
         x_c = x_c.reshape(b, h1, w1, h2, w2)
@@ -77,25 +87,24 @@ class Corr(nn.Module):
         xc1_o = x_c.view(b, h1*w1, h2, w2)
         xc1 = _zero_window(xc1_o, h1, w1, rat_s=0.15)
         val2 = get_topk(xc1, k=self.topk)
-        ind_max = self.argmax(xc1)
-        ind_max[..., 0] = ind_max[..., 0] / w2
-        ind_max[..., 1] = ind_max[..., 1] / h2
-        ind_max_o1 = ind_max.view(b, h1, w1, -1).permute(0, 3, 1, 2)
+        # ind_max = self.argmax(xc1)
+        # ind_max[..., 0] = ind_max[..., 0] / w2
+        # ind_max[..., 1] = ind_max[..., 1] / h2
+        # ind_max_o1 = ind_max.view(b, h1, w1, -1).permute(0, 3, 1, 2)
 
         # ind_max1 = ind_max_o1 - self.ind_arr
 
         xc2_o = x_c.view(b, h1, w1, h2 * w2).permute(0, 3, 1, 2).contiguous()
         xc2 = _zero_window(xc2_o, h2, w2, rat_s=0.15)
         val1 = get_topk(xc2, k=self.topk)
-        ind_max = self.argmax(xc2)
-        ind_max[..., 0] = ind_max[..., 0] / w2
-        ind_max[..., 1] = ind_max[..., 1] / h2
-        ind_max_o2 = ind_max.view(b, h1, w1, -1).permute(0, 3, 1, 2)
+        # ind_max = self.argmax(xc2)
+        # ind_max[..., 0] = ind_max[..., 0] / w2
+        # ind_max[..., 1] = ind_max[..., 1] / h2
+        # ind_max_o2 = ind_max.view(b, h1, w1, -1).permute(0, 3, 1, 2)
 
         # ind_max2 = ind_max_o2 - self.ind_arr
 
-        return val1, val2, ind_max_o1.permute(0, 2, 3, 1), \
-            ind_max_o2.permute(0, 2, 3, 1)
+        return val1, val2, x1_soft, x2_soft
 
 
 def std_mean(x):
@@ -200,11 +209,17 @@ class BusterModel(nn.Module):
         x_asf2 = self.aspp_forge(x2) * val2_conv
 
         # Corrensponding mask and forge
-        x_as1_p = F.grid_sample(x_as2, ind1)
-        x_as2_p = F.grid_sample(x_as1, ind2)
+        x_as1_p = self.non_local(x_as2, ind1)
+        x_as2_p = self.non_local(x_as1, ind2)
 
-        x_asf1_p = F.grid_sample(x_asf2, ind1)
-        x_asf2_p = F.grid_sample(x_asf1, ind2)
+        x_asf1_p = self.non_local(x_asf2, ind1)
+        x_asf2_p = self.non_local(x_asf1, ind2)
+
+        # x_as1_p = F.grid_sample(x_as2, ind1)
+        # x_as2_p = F.grid_sample(x_as1, ind2)
+
+        # x_asf1_p = F.grid_sample(x_asf2, ind1)
+        # x_asf2_p = F.grid_sample(x_asf1, ind2)
 
         # Final Mask
         out1 = self.head_mask(
@@ -222,6 +237,16 @@ class BusterModel(nn.Module):
                              align_corners=True)
 
         return out1, out2
+
+    def non_local(self, x, ind):
+        b, c, h2, w2 = x.shape
+        b, _, h1, w1 = ind.shape
+
+        x = x.reshape(b, c, -1)
+        ind = ind.reshape(b, h2 * w2, h1 * w1)
+        out = torch.bmm(x, ind).reshape(b, c, h1, w1)
+        return out
+
 
     def set_bn_to_eval(self):
         def fn(m):
