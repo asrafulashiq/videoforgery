@@ -24,6 +24,7 @@ from train import train_template_match_im
 from test import test_template_match_im
 
 import utils
+import create_volume
 
 
 def iou_time(t1, t2):
@@ -31,6 +32,7 @@ def iou_time(t1, t2):
         len(set(t1).union(set(t2))) + 1e-8
     )
     return iou
+
 
 def get_data(x, squeeze=True):
     if squeeze:
@@ -40,6 +42,7 @@ def get_data(x, squeeze=True):
     else:
         x = x.data.numpy()
     return x
+
 
 if __name__ == "__main__":
     # device
@@ -63,12 +66,15 @@ if __name__ == "__main__":
 
     dataset = Dataset_image(args=args, transform=tsfm)
 
-    #* path to save
+    # * path to save
     root = Path("tmp_affinity")
 
     mask_processor = utils.Preprocessor(args)
 
     data_path = Path("./tmp_video_match")
+
+    TTs = np.zeros(4)
+    TTf = np.zeros(4)
 
     for fldr in tqdm(data_path.iterdir()):
         print(str(fldr).upper())
@@ -118,7 +124,7 @@ if __name__ == "__main__":
                     mask2 = mask1
                 if np.all(mask2 == 0):
                     mask1 = mask2
-                
+
                 rat = mask1.sum() * 1. / (mask2.sum() + 1e-8)
                 rat = rat if rat > 1 else 1./rat
                 if rat < 0.6:
@@ -164,7 +170,6 @@ if __name__ == "__main__":
         # fig.savefig(out_mat_name)
         # plt.close('all')
 
-
         # detection
         det_arr = np.zeros(N)
         for k in range(N):
@@ -181,7 +186,8 @@ if __name__ == "__main__":
         Pred_mask_src = np.zeros((N, *list(X.shape[-2:])))
 
         Pred_mask_src[pred_gt_time] = D_np[pred_forge_time, pred_gt_time, 0]
-        Pred_mask_forge[pred_forge_time] = D_np[pred_forge_time, pred_gt_time, 1]
+        Pred_mask_forge[pred_forge_time] = D_np[pred_forge_time,
+                                                pred_gt_time, 1]
 
         GT_forge = get_data(Y_forge)
         GT_src = get_data(Y_orig)
@@ -191,11 +197,50 @@ if __name__ == "__main__":
         tsrc = utils.conf_mat(
             GT_src.ravel(), Pred_mask_src.ravel()).ravel()
 
+        TTs += tsrc
+        TTf += tforge
+
         f_forge = utils.fscore(tforge)
         f_src = utils.fscore(tsrc)
+
 
         print()
         print("\t F_src : {:.4f}".format(f_src))
         print("\t F_forge : {:.4f}".format(f_forge))
 
+        # save all images
 
+        folder_name = Path("tmp_output") / name
+
+        folder_gt = folder_name / "gt"
+        folder_pred = folder_name / "pred"
+        folder_gt.mkdir(parents=True, exist_ok=True)
+        folder_pred.mkdir(parents=True, exist_ok=True)
+
+        for i_cnt in range(N):
+            im = tsfm.inverse(X[i_cnt])
+
+            im_with_gt = utils.add_overlay(im, GT_src[i_cnt], GT_forge[i_cnt])
+            im_with_pred = utils.add_overlay(
+                im, Pred_mask_src[i_cnt], Pred_mask_forge[i_cnt]
+            )
+
+            skimage.io.imsave(
+                str(folder_gt / f"{i_cnt}.jpg"),
+                skimage.img_as_ubyte(im_with_gt)
+            )
+            skimage.io.imsave(
+                str(folder_pred / f"{i_cnt}.jpg"),
+                skimage.img_as_ubyte(im_with_pred)
+            )
+
+        # plot volume
+        create_volume.create(GT_src, GT_forge,
+                             path=folder_name / "gt_vol.png")
+
+        create_volume.create(Pred_mask_src, Pred_mask_forge,
+                             path=folder_name / "pred_vol.png")
+
+    print("FINAL Score:")
+    print("Source : {:.4f}".format(utils.fscore(TTs)))
+    print("Forge : {:.4f}".format(utils.fscore(TTf)))
