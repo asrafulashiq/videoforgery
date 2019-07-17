@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 from pathlib import Path
 import torch.nn.functional as F
 import skimage
-
+from tqdm import tqdm
 # custom module
 import config
 from dataset import Dataset_image
@@ -25,6 +25,21 @@ from test import test_template_match_im
 
 import utils
 
+
+def iou_time(t1, t2):
+    iou = len(set(t1).intersection(set(t2)))/(
+        len(set(t1).union(set(t2))) + 1e-8
+    )
+    return iou
+
+def get_data(x, squeeze=True):
+    if squeeze:
+        x = x.squeeze()
+    if x.is_cuda:
+        x = x.data.cpu().numpy()
+    else:
+        x = x.data.numpy()
+    return x
 
 if __name__ == "__main__":
     # device
@@ -43,33 +58,25 @@ if __name__ == "__main__":
     #! TEMPORARY
     args.videoset = 'tmp_youtube'
 
-    # model name
-    model_name = args.model + "_" + args.model_type + "_" + \
-        args.videoset + args.suffix
-
-    print(f"Model Name: {model_name}")
-
-    # logger
-    logger = SummaryWriter("./logs/" + model_name)
-
     # dataset
     tsfm = CustomTransform(size=args.size)
 
     dataset = Dataset_image(args=args, transform=tsfm)
 
-
+    #* path to save
     root = Path("tmp_affinity")
 
     mask_processor = utils.Preprocessor(args)
 
     data_path = Path("./tmp_video_match")
 
-    for fldr in data_path.iterdir():
+    for fldr in tqdm(data_path.iterdir()):
+        print(str(fldr).upper())
         if not fldr.is_dir():
             continue
         path_data = fldr / "data_pred.pt"
         Data = torch.load(str(path_data))
-        print("Data loaded from {}".format(path_data))
+        # print("Data loaded from {}".format(path_data))
 
         X, Y_forge, Y_orig, gt_time, forge_time = Data['X'], \
             Data['Y_forge'], Data['Y_orig'], Data['gt_time'], \
@@ -81,18 +88,21 @@ if __name__ == "__main__":
         path = root / name
         path.mkdir(parents=True, exist_ok=True)
 
-        pdf = MultiPagePdf(total_im=N*N*2, out_name=str(path / "affinity.pdf"),
-                           nrows=N, ncols=2, figsize=(5, N*2))
+        # pdf = MultiPagePdf(total_im=N*N*2, out_name=str(path / "affinity.pdf"),
+        #                    nrows=N, ncols=2, figsize=(5, N*2))
 
         Hist = np.zeros((N, N))
+
+        D_np = np.zeros(tuple(D_pred.shape))
+
         for i in range(N):
             if i in forge_time:
                 i_ind = np.where(forge_time == i)[0][0]
                 gt_ind = gt_time[i_ind]
             else:
                 gt_ind = None
-            out1 = D_pred[i, :, 0]
-            out2 = D_pred[i, :, 1]
+            out1 = D_pred[i, :, 0]  # source
+            out2 = D_pred[i, :, 1]  # forge
             out1 = out1.squeeze().data.cpu().numpy()
             out2 = out2.squeeze().data.cpu().numpy()
 
@@ -108,6 +118,14 @@ if __name__ == "__main__":
                     mask2 = mask1
                 if np.all(mask2 == 0):
                     mask1 = mask2
+                
+                rat = mask1.sum() * 1. / (mask2.sum() + 1e-8)
+                rat = rat if rat > 1 else 1./rat
+                if rat < 0.6:
+                    mask1 = mask2 = np.zeros_like(mask1)
+
+                D_np[i, j, 0] = mask1
+                D_np[i, j, 1] = mask2
 
                 im1 = tsfm.inverse(X[j])
                 im2 = tsfm.inverse(X[i])
@@ -120,17 +138,64 @@ if __name__ == "__main__":
 
                 Hist[i, j] = 1 - vcomp
 
-                ax = pdf.plot_one(im1_masked)
-                ax.set_xlabel(f"{j}", fontsize="small")
+                # ax = pdf.plot_one(im1_masked)
+                # ax.set_xlabel(f"{j}", fontsize="small")
 
-                ax = pdf.plot_one(im2_masked)
-                ax.set_xlabel(f"{i}", fontsize="small")
+                # ax = pdf.plot_one(im2_masked)
+                # ax.set_xlabel(f"{i}", fontsize="small")
 
-                ax.yaxis.set_label_position("right")
-                ax.set_ylabel(f"Hist: {1-vcomp:.4f}")
+                # ax.yaxis.set_label_position("right")
+                # ax.set_ylabel(f"Hist: {1-vcomp:.4f}")
 
-                if gt_ind is not None and j == gt_ind:
-                    ax.set_title("GT", fontsize="large")
-        pdf.final()
-        print("pdf saved")
+                # if gt_ind is not None and j == gt_ind:
+                #     ax.set_title("GT", fontsize="large")
+        # pdf.final()
+        # print("pdf saved")
+
+        # matshow
+        # mat_gt = np.zeros((N, N))
+        # for _if, _ig in zip(forge_time, gt_time):
+        #     mat_gt[_if, _ig] = 1.
+        # out_mat_name = str(path / "mat.pdf")
+        # fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(3, 3))
+        # axes[0].matshow(Hist)
+        # axes[1].matshow(mat_gt)
+        # fig.tight_layout()
+        # fig.savefig(out_mat_name)
+        # plt.close('all')
+
+
+        # detection
+        det_arr = np.zeros(N)
+        for k in range(N):
+            det_arr[k] = np.mean(np.diag(Hist, k=-k))
+        _ind = np.argmax(det_arr)
+        pred_forge_time = np.arange(_ind, N)
+        pred_gt_time = np.arange(0, len(pred_forge_time))
+
+        # compare
+        print("\tTime IoU: {}".format(iou_time(pred_forge_time, forge_time)))
+
+        # get mask: 0:source, 1:forge
+        Pred_mask_forge = np.zeros((N, *list(X.shape[-2:])))
+        Pred_mask_src = np.zeros((N, *list(X.shape[-2:])))
+
+        Pred_mask_src[pred_gt_time] = D_np[pred_forge_time, pred_gt_time, 0]
+        Pred_mask_forge[pred_forge_time] = D_np[pred_forge_time, pred_gt_time, 1]
+
+        GT_forge = get_data(Y_forge)
+        GT_src = get_data(Y_orig)
+
+        tforge = utils.conf_mat(
+            GT_forge.ravel(), Pred_mask_forge.ravel()).ravel()
+        tsrc = utils.conf_mat(
+            GT_src.ravel(), Pred_mask_src.ravel()).ravel()
+
+        f_forge = utils.fscore(tforge)
+        f_src = utils.fscore(tsrc)
+
+        print()
+        print("\t F_src : {:.4f}".format(f_src))
+        print("\t F_forge : {:.4f}".format(f_forge))
+
 
