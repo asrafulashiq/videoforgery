@@ -71,18 +71,14 @@ class Corr(nn.Module):
         x_c_o = torch.matmul(x1n.permute(0, 2, 3, 1).view(b, -1, c),
                              x2n.view(b, c, -1))  # h1 * w1, h2 * w2
 
-        x1_soft = x_c_o.reshape(b, h1, w1, -1).permute(0, 3, 1, 2)
-        x1_soft = _zero_window(x1_soft, h2, w2, rat_s=0.15)
-        x1_soft = F.softmax(x1_soft * self.alpha, dim=-3)
-
-        x2_soft = x_c_o.reshape(b, h1 * w1, h2, w2)
-        x2_soft = _zero_window(x2_soft, h1, w1, rat_s=0.15)
-        x2_soft = F.softmax(x2_soft * self.alpha, dim=-3)
-
-        
         x_c = F.softmax(x_c_o*self.alpha, dim=-1) * \
             F.softmax(x_c_o*self.alpha, dim=-2)
         x_c = x_c.reshape(b, h1, w1, h2, w2)
+
+        x1_soft = x_c.reshape(b, h1, w1, h2*w2).permute(0, 3, 1, 2)
+        x2_soft = x_c.reshape(b, h1*w1, h2, w2)
+        x1_soft = x1_soft / (x1_soft.sum(dim=-3, keepdim=True)+1e-8)
+        x2_soft = x2_soft / (x2_soft.sum(dim=-3, keepdim=True)+1e-8)
 
         xc1_o = x_c.view(b, h1*w1, h2, w2)
         xc1 = _zero_window(xc1_o, h1, w1, rat_s=0.15)
@@ -146,7 +142,7 @@ class BusterModel(nn.Module):
         )
 
         self.aspp_mask = models.segmentation.deeplabv3.ASPP(in_channels=in_cat,
-                                                       atrous_rates=[12, 24, 36])
+                                                            atrous_rates=[12, 24, 36])
 
         self.head_mask = nn.Sequential(
             nn.Conv2d(4 * 256, 2 * 256, 1),
@@ -194,7 +190,6 @@ class BusterModel(nn.Module):
         # attention weight
         val1_conv = self.val_conv(val1)
         val2_conv = self.val_conv(val2)
-
 
         #### Mask part : M  ############
         x_as1 = self.aspp_mask(x1)
@@ -246,7 +241,6 @@ class BusterModel(nn.Module):
         ind = ind.reshape(b, h2 * w2, h1 * w1)
         out = torch.bmm(x, ind).reshape(b, c, h1, w1)
         return out
-
 
     def set_bn_to_eval(self):
         def fn(m):
