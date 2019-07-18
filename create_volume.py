@@ -14,6 +14,38 @@ import cv2
 from PIL import Image
 import skimage
 
+import matplotlib.pyplot as plt
+
+
+def plot_conf_mat(conf_arr, path):
+    norm_conf = []
+    for i in conf_arr:
+        a = 0
+        tmp_arr = []
+        a = sum(i, 0)
+        for j in i:
+            tmp_arr.append(float(j)/float(a + 1e-8))
+        norm_conf.append(tmp_arr)
+    fig = plt.figure()
+    plt.clf()
+    ax = fig.add_subplot(111)
+    ax.set_aspect(1)
+    res = ax.imshow(np.array(norm_conf), cmap=plt.cm.jet,
+                    interpolation='nearest')
+    width, height = np.array(conf_arr).shape
+    for x in range(width):
+        for y in range(height):
+            ax.annotate(f"{norm_conf[x][y]:.2f}", xy=(y, x),
+                        horizontalalignment='center',
+                        verticalalignment='center')
+
+    cb = fig.colorbar(res)
+    classnames = [str(i) for i in range(width)]
+    plt.xticks(range(width), classnames[:width])
+    plt.yticks(range(height), classnames[:height])
+    plt.savefig(path, format='png')
+    plt.close('all')
+
 
 def set_axes_radius(ax, origin, radius):
     ax.set_xlim3d([origin[0] - radius, origin[0] + radius])

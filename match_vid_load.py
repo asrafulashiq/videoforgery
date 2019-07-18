@@ -75,6 +75,7 @@ if __name__ == "__main__":
 
     TTs = np.zeros(4)
     TTf = np.zeros(4)
+    TTa = np.zeros(4)
 
     for fldr in tqdm(data_path.iterdir()):
         print(str(fldr).upper())
@@ -94,8 +95,8 @@ if __name__ == "__main__":
         path = root / name
         path.mkdir(parents=True, exist_ok=True)
 
-        # pdf = MultiPagePdf(total_im=N*N*2, out_name=str(path / "affinity.pdf"),
-        #                    nrows=N, ncols=2, figsize=(5, N*2))
+        pdf = MultiPagePdf(total_im=N*N*2, out_name=str(path / "affinity.pdf"),
+                           nrows=N, ncols=2, figsize=(5, N*2))
 
         Hist = np.zeros((N, N))
 
@@ -144,33 +145,37 @@ if __name__ == "__main__":
 
                 Hist[i, j] = 1 - vcomp
 
-                # ax = pdf.plot_one(im1_masked)
-                # ax.set_xlabel(f"{j}", fontsize="small")
+                ax = pdf.plot_one(im1_masked)
+                ax.set_xlabel(f"{j}", fontsize="small")
 
-                # ax = pdf.plot_one(im2_masked)
-                # ax.set_xlabel(f"{i}", fontsize="small")
+                ax = pdf.plot_one(im2_masked)
+                ax.set_xlabel(f"{i}", fontsize="small")
 
-                # ax.yaxis.set_label_position("right")
-                # ax.set_ylabel(f"Hist: {1-vcomp:.4f}")
+                ax.yaxis.set_label_position("right")
+                ax.set_ylabel(f"Hist: {1-vcomp:.4f}")
 
-                # if gt_ind is not None and j == gt_ind:
-                #     ax.set_title("GT", fontsize="large")
-        # pdf.final()
-        # print("pdf saved")
+                if gt_ind is not None and j == gt_ind:
+                    ax.set_title("GT", fontsize="large")
+        pdf.final()
+        print("pdf saved")
 
         # matshow
-        # mat_gt = np.zeros((N, N))
-        # for _if, _ig in zip(forge_time, gt_time):
-        #     mat_gt[_if, _ig] = 1.
-        # out_mat_name = str(path / "mat.pdf")
-        # fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(3, 3))
-        # axes[0].matshow(Hist)
-        # axes[1].matshow(mat_gt)
-        # fig.tight_layout()
-        # fig.savefig(out_mat_name)
-        # plt.close('all')
+        mat_gt = np.zeros((N, N))
+        for _if, _ig in zip(forge_time, gt_time):
+            mat_gt[_if, _ig] = 1.
+        out_mat_name = str(path / "mat.pdf")
 
-        # detection
+        create_volume.plot_conf_mat(mat_gt, str(path / "mat_gt.png"))
+        create_volume.plot_conf_mat(Hist, str(path / "mat_pred.png"))
+
+        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(3, 3))
+        axes[0].matshow(Hist)
+        axes[1].matshow(mat_gt)
+        fig.tight_layout()
+        fig.savefig(out_mat_name)
+        plt.close('all')
+
+        detection
         det_arr = np.zeros(N)
         for k in range(N):
             det_arr[k] = np.mean(np.diag(Hist, k=-k))
@@ -188,29 +193,37 @@ if __name__ == "__main__":
         Pred_mask_src[pred_gt_time] = D_np[pred_forge_time, pred_gt_time, 0]
         Pred_mask_forge[pred_forge_time] = D_np[pred_forge_time,
                                                 pred_gt_time, 1]
+        Pred_mask_all = np.logical_or(Pred_mask_forge > 0.5, Pred_mask_src > 0.5)
 
         GT_forge = get_data(Y_forge)
         GT_src = get_data(Y_orig)
+        GT_all = np.logical_or(GT_forge > 0.5, GT_src > 0.5)
+
 
         tforge = utils.conf_mat(
             GT_forge.ravel(), Pred_mask_forge.ravel()).ravel()
         tsrc = utils.conf_mat(
             GT_src.ravel(), Pred_mask_src.ravel()).ravel()
+        tall = utils.conf_mat(
+            GT_all.ravel(), Pred_mask_all.ravel()).ravel()
 
         TTs += tsrc
         TTf += tforge
+        TTa += tall
 
         f_forge = utils.fscore(tforge)
         f_src = utils.fscore(tsrc)
+        f_all = utils.fscore(tall)
 
 
         print()
         print("\t F_src : {:.4f}".format(f_src))
         print("\t F_forge : {:.4f}".format(f_forge))
+        print("\t F_all : {:.4f}".format(f_all))
 
         # save all images
 
-        folder_name = Path("tmp_output") / name
+        folder_name = Path("tmp_tmp") / name
 
         folder_gt = folder_name / "gt"
         folder_pred = folder_name / "pred"
@@ -219,11 +232,17 @@ if __name__ == "__main__":
 
         for i_cnt in range(N):
             im = tsfm.inverse(X[i_cnt])
+            if i_cnt != 0:
+                im_with_gt = utils.add_overlay(im, GT_forge[i_cnt], c1=[1, 0, 0])
+                im_with_pred = utils.add_overlay(
+                    im, Pred_mask_forge[i_cnt], c1=[1, 0, 0]
+                )
 
-            im_with_gt = utils.add_overlay(im, GT_src[i_cnt], GT_forge[i_cnt])
-            im_with_pred = utils.add_overlay(
-                im, Pred_mask_src[i_cnt], Pred_mask_forge[i_cnt]
-            )
+            else:
+                im_with_gt = utils.add_overlay(im, GT_src[i_cnt])            
+                im_with_pred = utils.add_overlay(
+                    im, Pred_mask_src[i_cnt]
+                )
 
             skimage.io.imsave(
                 str(folder_gt / f"{i_cnt}.jpg"),
@@ -244,3 +263,4 @@ if __name__ == "__main__":
     print("FINAL Score:")
     print("Source : {:.4f}".format(utils.fscore(TTs)))
     print("Forge : {:.4f}".format(utils.fscore(TTf)))
+    print("Mask : {:.4f}".format(utils.fscore(TTa)))
