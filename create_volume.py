@@ -35,11 +35,11 @@ def plot_conf_mat(conf_arr, path):
     width, height = np.array(conf_arr).shape
     for x in range(width):
         for y in range(height):
-            ax.annotate(f"{norm_conf[x][y]:.2f}", xy=(y, x),
+            ax.annotate(f"{conf_arr[x][y]:.2f}", xy=(y, x),
                         horizontalalignment='center',
                         verticalalignment='center')
 
-    cb = fig.colorbar(res)
+    # cb = fig.colorbar(res)
     classnames = [str(i) for i in range(width)]
     plt.xticks(range(width), classnames[:width])
     plt.yticks(range(height), classnames[:height])
